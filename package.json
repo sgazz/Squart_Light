@@ -1,0 +1,18 @@
+{
+  "name": "squart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "^0.14.0",
+    "vite": "^5.0.0"
+  }
+}
