@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { generateBoard, ORIENTATION, GAME_STATUS, placeDomino } from './game/board.js';
+import { generateBoard, ORIENTATION, GAME_STATUS, placeDomino, countAvailableMoves } from './game/board.js';
 import { buildBoardGroup, addDominoMesh } from './three/boardRenderer.js';
 import { createWinnerBanner, updateWinnerBanner, disposeWinnerBanner } from './three/winnerBanner.js';
-import { CompassOverlay } from './three/compassOverlay.js';
 
 const canvasWrapper = document.getElementById('canvas-wrapper');
 const canvas = document.getElementById('squart-canvas');
@@ -19,11 +18,21 @@ const defaultPercentageButton = document.getElementById('default-percentage-btn'
 const statsElement = document.getElementById('board-stats');
 const horizontalOrientationButton = document.getElementById('orientation-horizontal');
 const verticalOrientationButton = document.getElementById('orientation-vertical');
+const turnIndicator = document.getElementById('turn-indicator');
+const movesHorizontalElement = document.getElementById('moves-horizontal');
+const movesVerticalElement = document.getElementById('moves-vertical');
+const boardFeedback = document.getElementById('board-feedback');
+const onboardingOverlay = document.getElementById('onboarding-overlay');
+const onboardingDismiss = document.getElementById('onboarding-dismiss');
 
 const ORIENTATION_LABELS = {
   [ORIENTATION.HORIZONTAL]: 'Horizontal (Blue)',
   [ORIENTATION.VERTICAL]: 'Vertical (Red)',
 };
+
+const BOARD_FEEDBACK_DURATION = 2200;
+const REGENERATE_DEBOUNCE_MS = 250;
+const ONBOARDING_KEY = 'squart:onboarding:v1';
 
 const scene = new THREE.Scene();
 scene.background = createBackgroundTexture();
@@ -37,7 +46,7 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+scene.add(new THREE.AmbientLight(0xffffff, 0.75));
 
 const hemiLight = new THREE.HemisphereLight(0x7aa8ff, 0x0b0f1c, 0.45);
 scene.add(hemiLight);
@@ -47,6 +56,14 @@ keyLight.position.set(5, 10, 5);
 keyLight.castShadow = true;
 scene.add(keyLight);
 
+const fillLight = new THREE.DirectionalLight(0x96b5ff, 0.45);
+fillLight.position.set(-6, 6.5, -4);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffb86c, 0.3);
+rimLight.position.set(0, 4, 7);
+scene.add(rimLight);
+
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
@@ -55,18 +72,33 @@ let boardGroup = null;
 let cellMeshes = [];
 let customInactivePercentage = null;
 let winnerBanner = null;
-const compass = new CompassOverlay();
+let regenerateTimeoutId = null;
+let feedbackTimeoutId = null;
+const dominoAnimations = [];
+const inactiveAnimations = [];
 
 function init() {
   initDimensionSliders();
   regenerateBoard();
   window.addEventListener('resize', handleResize);
   renderer.domElement.addEventListener('pointerdown', handlePointerDown);
-  regenerateButton.addEventListener('click', regenerateBoard);
+  regenerateButton.addEventListener('click', () => scheduleRegenerateBoard(true));
   percentageSlider.addEventListener('input', handlePercentageChange);
   defaultPercentageButton.addEventListener('click', handleDefaultPercentage);
   rowSlider.addEventListener('input', handleDimensionChange);
   colSlider.addEventListener('input', handleDimensionChange);
+  document.addEventListener('keydown', handleShortcutKeys);
+  if (onboardingDismiss) {
+    onboardingDismiss.addEventListener('click', () => hideOnboarding(true));
+  }
+  if (onboardingOverlay) {
+    onboardingOverlay.addEventListener('click', (event) => {
+      if (event.target === onboardingOverlay) {
+        hideOnboarding(true);
+      }
+    });
+  }
+  showOnboardingIfNeeded();
   updatePercentageDisplay();
   handleResize();
   animate();
@@ -101,9 +133,9 @@ function regenerateBoard() {
   updateBoardGroup();
   updateOrientationDisplay();
   updateStats();
+  updateRemainingMoves();
   syncWinnerBanner();
   updateCamera(rows, cols);
-  compass.updateBoardSize(rows, cols);
 }
 
 function updateBoardGroup() {
@@ -114,6 +146,9 @@ function updateBoardGroup() {
   boardGroup = buildBoardGroup(boardData);
   cellMeshes = boardGroup.userData?.cellMeshes ?? [];
   scene.add(boardGroup);
+  dominoAnimations.length = 0;
+  inactiveAnimations.length = 0;
+  queueInactiveWave(boardGroup, boardData);
 }
 
 function updateOrientationDisplay() {
@@ -121,6 +156,7 @@ function updateOrientationDisplay() {
   verticalOrientationButton.classList.remove('active', 'winner');
 
   if (!boardData) {
+    updateTurnIndicator();
     return;
   }
 
@@ -130,6 +166,7 @@ function updateOrientationDisplay() {
     } else if (boardData.winner === ORIENTATION.VERTICAL) {
       verticalOrientationButton.classList.add('winner');
     }
+    updateTurnIndicator();
     return;
   }
 
@@ -138,6 +175,7 @@ function updateOrientationDisplay() {
   } else if (boardData.currentPlayer === ORIENTATION.VERTICAL) {
     verticalOrientationButton.classList.add('active');
   }
+  updateTurnIndicator();
 }
 
 function updateStats() {
@@ -157,25 +195,23 @@ function updateStats() {
       ? 'Mode: Default random (17–19%)'
       : `Custom target: ${boardData.requestedInactivePercentage}%`;
 
-  let statusInfo = '';
-  if (boardData.status === GAME_STATUS.FINISHED) {
-    if (boardData.winner) {
-      statusInfo = `Winner: <strong>${ORIENTATION_LABELS[boardData.winner]}</strong>`;
-    } else {
-      statusInfo = '<strong>Draw: No moves available for either player</strong>';
-    }
-  } else {
-    statusInfo = `Current turn: <strong>${ORIENTATION_LABELS[boardData.currentPlayer]}</strong>`;
-  }
+  const statusInfo =
+    boardData.status === GAME_STATUS.FINISHED
+      ? boardData.winner
+        ? `Result: <strong>${ORIENTATION_LABELS[boardData.winner]} wins</strong>`
+        : '<strong>Result: Draw</strong>'
+      : 'Game status: <strong>In progress</strong>';
 
   statsElement.innerHTML = `${baseInfo}<br />${modeInfo}<br />${statusInfo}`;
 }
 
 function updateCamera(rows, cols) {
   const maxDimension = Math.max(rows, cols);
-  const distance = Math.max(10, maxDimension * 2.4);
-  camera.position.set(distance, distance, distance);
+  const distance = Math.max(7.5, maxDimension * 1.75);
+  camera.position.set(distance, distance * 0.82, distance * 0.95);
   controls.target.set(0, 0, 0);
+  controls.maxDistance = distance * 2.2;
+  controls.minDistance = Math.max(4, maxDimension * 1.1);
   controls.update();
 }
 
@@ -190,14 +226,14 @@ function handleResize() {
 function handlePercentageChange(event) {
   customInactivePercentage = Number(event.target.value);
   updatePercentageDisplay();
-  regenerateBoard();
+  scheduleRegenerateBoard();
 }
 
 function handleDefaultPercentage() {
   customInactivePercentage = null;
   percentageSlider.value = '17';
   updatePercentageDisplay();
-  regenerateBoard();
+  scheduleRegenerateBoard(true);
 }
 
 function updatePercentageDisplay() {
@@ -210,7 +246,7 @@ function updatePercentageDisplay() {
 
 function handleDimensionChange() {
   updateDimensionDisplay();
-  regenerateBoard();
+  scheduleRegenerateBoard();
 }
 
 function updateDimensionDisplay() {
@@ -218,8 +254,95 @@ function updateDimensionDisplay() {
   colValue.textContent = `${colSlider.value}`;
 }
 
+function scheduleRegenerateBoard(immediate = false) {
+  if (regenerateTimeoutId) {
+    window.clearTimeout(regenerateTimeoutId);
+    regenerateTimeoutId = null;
+  }
+
+  if (immediate) {
+    regenerateBoard();
+    showFeedback('Board updated', 'info', 1200);
+    return;
+  }
+
+  regenerateTimeoutId = window.setTimeout(() => {
+    regenerateBoard();
+    regenerateTimeoutId = null;
+  }, REGENERATE_DEBOUNCE_MS);
+}
+
+function updateRemainingMoves() {
+  if (!movesHorizontalElement || !movesVerticalElement) {
+    return;
+  }
+
+  if (!boardData) {
+    movesHorizontalElement.textContent = '—';
+    movesVerticalElement.textContent = '—';
+    return;
+  }
+
+  const horizontalMoves = countAvailableMoves(boardData, ORIENTATION.HORIZONTAL);
+  const verticalMoves = countAvailableMoves(boardData, ORIENTATION.VERTICAL);
+  movesHorizontalElement.textContent = horizontalMoves.toString();
+  movesVerticalElement.textContent = verticalMoves.toString();
+}
+
+function updateTurnIndicator() {
+  if (!turnIndicator) {
+    return;
+  }
+
+  if (!boardData) {
+    turnIndicator.textContent = 'Preparing board...';
+    turnIndicator.classList.remove('surge');
+    return;
+  }
+
+  if (boardData.status === GAME_STATUS.FINISHED) {
+    const winnerLabel = boardData.winner ? `${ORIENTATION_LABELS[boardData.winner]} wins` : 'Draw';
+    turnIndicator.textContent = winnerLabel;
+    turnIndicator.classList.remove('surge');
+    return;
+  }
+
+  const label = boardData.currentPlayer === ORIENTATION.HORIZONTAL ? ORIENTATION_LABELS[ORIENTATION.HORIZONTAL] : ORIENTATION_LABELS[ORIENTATION.VERTICAL];
+  turnIndicator.textContent = `${label} to move`;
+  pulseTurnIndicator();
+}
+
+function pulseTurnIndicator() {
+  if (!turnIndicator) {
+    return;
+  }
+  turnIndicator.classList.remove('surge');
+  // Force reflow to restart animation
+  void turnIndicator.offsetWidth;
+  turnIndicator.classList.add('surge');
+}
+
+function showFeedback(message, type = 'info', duration = BOARD_FEEDBACK_DURATION) {
+  if (!boardFeedback) {
+    return;
+  }
+
+  boardFeedback.className = '';
+  boardFeedback.classList.add(type, 'visible');
+  boardFeedback.textContent = message;
+
+  if (feedbackTimeoutId) {
+    window.clearTimeout(feedbackTimeoutId);
+  }
+
+  feedbackTimeoutId = window.setTimeout(() => {
+    boardFeedback.classList.remove('visible', 'info', 'success', 'warning');
+    feedbackTimeoutId = null;
+  }, duration);
+}
+
 function handlePointerDown(event) {
-  if (!boardGroup || !boardData || boardData.status !== GAME_STATUS.ACTIVE) {
+  if (!boardGroup || !boardData) {
     return;
   }
 
@@ -233,9 +356,10 @@ function handlePointerDown(event) {
 
   raycaster.setFromCamera(pointer, camera);
   const intersects = raycaster.intersectObjects(cellMeshes, false);
-  const hit = intersects.find((intersect) => intersect.object.userData && !intersect.object.userData.isInactive);
+  const hit = intersects.find((intersect) => intersect.object.userData);
 
   if (!hit) {
+    showFeedback('Try placing dominoes on active squares within the board.', 'info', 1500);
     return;
   }
 
@@ -244,21 +368,37 @@ function handlePointerDown(event) {
 }
 
 function tryPlaceDomino(row, col) {
-  const placement = placeDomino(boardData, { row, col });
-  if (!placement) {
+  if (!boardData) {
     return;
   }
 
-  addDominoMesh(boardGroup, placement);
+  if (boardData.status !== GAME_STATUS.ACTIVE) {
+    showFeedback('The round is over. Regenerate the board to play again.', 'warning');
+    return;
+  }
+
+  const placement = placeDomino(boardData, { row, col });
+  if (!placement) {
+    showFeedback('Invalid move: domino cannot cover inactive or occupied squares.', 'warning');
+    return;
+  }
+
+  const mesh = addDominoMesh(boardGroup, placement);
+  if (mesh) {
+    queueDominoAnimation(mesh);
+  }
   updateOrientationDisplay();
   updateStats();
+  updateRemainingMoves();
   syncWinnerBanner();
+  showFeedback('Domino placed!', 'success', 1000);
 }
 
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  compass.updateFromCamera(camera);
+  updateInactiveAnimations(performance.now());
+  updateDominoAnimations(performance.now());
   renderer.render(scene, camera);
 }
 
@@ -309,6 +449,136 @@ function clearWinnerBanner() {
 
 init();
 
+function updateDominoAnimations(now) {
+  for (let i = dominoAnimations.length - 1; i >= 0; i -= 1) {
+    const anim = dominoAnimations[i];
+    const progress = Math.min((now - anim.start) / anim.duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const scale = 0.1 + eased * 0.9;
+    anim.mesh.scale.set(scale, scale, scale);
+    if (progress >= 1) {
+      anim.mesh.scale.set(1, 1, 1);
+      dominoAnimations.splice(i, 1);
+    }
+  }
+}
+
+function queueDominoAnimation(mesh) {
+  if (!mesh) {
+    return;
+  }
+  dominoAnimations.push({
+    mesh,
+    start: performance.now(),
+    duration: 240,
+  });
+}
+
+function queueInactiveWave(group, board) {
+  if (!group || !board) {
+    return;
+  }
+
+  const waveTargets = group.userData?.inactiveWaveTargets ?? [];
+  if (!waveTargets.length) {
+    return;
+  }
+
+  const midRow = (board.rows - 1) / 2;
+  const midCol = (board.cols - 1) / 2;
+  const baseTime = performance.now();
+
+  waveTargets.forEach((target) => {
+    const distance = Math.hypot(target.row - midRow, target.col - midCol);
+    const delay = distance * 85;
+    inactiveAnimations.push({
+      mesh: target.mesh,
+      start: baseTime + delay,
+      duration: 420,
+      from: target.initialY ?? target.mesh.position.y,
+      to: target.targetY ?? 0,
+    });
+  });
+}
+
+function updateInactiveAnimations(now) {
+  for (let i = inactiveAnimations.length - 1; i >= 0; i -= 1) {
+    const anim = inactiveAnimations[i];
+    if (now < anim.start) {
+      continue;
+    }
+    const progress = Math.min((now - anim.start) / anim.duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 2.2);
+    const y = anim.from + (anim.to - anim.from) * eased;
+    anim.mesh.position.y = y;
+    if (progress >= 1) {
+      anim.mesh.position.y = anim.to;
+      inactiveAnimations.splice(i, 1);
+    }
+  }
+}
+
+function handleShortcutKeys(event) {
+  const tag = event.target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || event.metaKey || event.ctrlKey || event.altKey) {
+    return;
+  }
+
+  switch (event.key.toLowerCase()) {
+    case 'r':
+      showFeedback('Regenerating board...', 'info', 900);
+      scheduleRegenerateBoard(true);
+      break;
+    case 'h':
+      flashOrientationButton(horizontalOrientationButton);
+      showFeedback('Horizontal player places horizontal dominoes automatically.', 'info', 1500);
+      break;
+    case 'v':
+      flashOrientationButton(verticalOrientationButton);
+      showFeedback('Vertical player places vertical dominoes automatically.', 'info', 1500);
+      break;
+    case 'escape':
+      hideOnboarding(false);
+      break;
+    default:
+      break;
+  }
+}
+
+function flashOrientationButton(button) {
+  if (!button) {
+    return;
+  }
+  button.classList.add('flash');
+  window.setTimeout(() => button.classList.remove('flash'), 600);
+}
+
+function showOnboardingIfNeeded() {
+  if (!onboardingOverlay) {
+    return;
+  }
+  const seen = window.localStorage?.getItem(ONBOARDING_KEY);
+  if (!seen) {
+    onboardingOverlay.classList.remove('hidden');
+  } else {
+    onboardingOverlay.classList.add('hidden');
+  }
+}
+
+function hideOnboarding(persist = false) {
+  if (!onboardingOverlay) {
+    return;
+  }
+  onboardingOverlay.classList.add('hidden');
+  if (persist) {
+    try {
+      window.localStorage?.setItem(ONBOARDING_KEY, '1');
+    } catch (error) {
+      console.warn('Unable to persist onboarding state', error);
+    }
+  }
+}
+
 function createBackgroundTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -337,6 +607,8 @@ function createBackgroundTexture() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace ?? undefined;
+  if ('colorSpace' in texture) {
+    texture.colorSpace = THREE.SRGBColorSpace;
+  }
   return texture;
 }

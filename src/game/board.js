@@ -271,6 +271,29 @@ export function hasAvailableMove(board, orientation) {
   return false;
 }
 
+export function countAvailableMoves(board, orientation) {
+  if (!board) {
+    return 0;
+  }
+
+  const offsets = ORIENTATION_OFFSETS[orientation];
+  if (!offsets) {
+    return 0;
+  }
+
+  let count = 0;
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      const positions = resolveDominoPositions(board, { row, col }, orientation);
+      if (positions && canPlaceDomino(board, positions)) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
+
 export function getOpponentOrientation(orientation) {
   if (orientation === ORIENTATION.HORIZONTAL) {
     return ORIENTATION.VERTICAL;

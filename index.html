@@ -154,53 +154,36 @@
         font-weight: 600;
         pointer-events: none;
         opacity: 0.85;
-      }
-
-      .orientation-button:disabled {
-        cursor: default;
+        transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
       }
 
       .orientation-button.horizontal {
-        background: rgba(31, 111, 235, 0.2);
-        border-color: rgba(31, 111, 235, 0.45);
-        color: #ffffff;
-        opacity: 0.6;
-      }
-
-      .orientation-button.horizontal.active {
-        background: #1f6feb;
-        border-color: #1f6feb;
-        color: #ffffff;
-        opacity: 1;
-      }
-      .orientation-button.horizontal.winner {
-        background: #1f6feb;
-        border-color: #1f6feb;
-        color: #ffffff;
+        background: rgba(31, 111, 235, 0.15);
+        border-color: rgba(31, 111, 235, 0.35);
+        color: #f3f6ff;
+        opacity: 0.55;
       }
 
       .orientation-button.vertical {
-        background: rgba(215, 58, 73, 0.2);
-        border-color: rgba(215, 58, 73, 0.45);
-        color: #ffffff;
-        opacity: 0.6;
+        background: rgba(215, 58, 73, 0.15);
+        border-color: rgba(215, 58, 73, 0.35);
+        color: #ffeaea;
+        opacity: 0.55;
       }
 
-      .orientation-button.vertical.active {
-        background: #d73a49;
-        border-color: #d73a49;
-        color: #ffffff;
+      .orientation-button.active {
         opacity: 1;
+        transform: scale(1.02);
+        box-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
       }
-      .orientation-button.vertical.winner {
-        background: #d73a49;
-        border-color: #d73a49;
-        color: #ffffff;
+
+      .orientation-button.flash {
+        transform: scale(1.04);
+        box-shadow: 0 0 22px rgba(255, 255, 255, 0.4);
       }
 
       .orientation-button.winner {
-        box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
-        opacity: 1;
+        box-shadow: 0 0 22px rgba(255, 255, 255, 0.45);
       }
 
       #percentage-display {
@@ -208,11 +191,177 @@
         opacity: 0.85;
       }
 
+      #turn-indicator {
+        margin-top: 1rem;
+        padding: 0.65rem 0.75rem;
+        border-radius: 0.6rem;
+        background: rgba(255, 255, 255, 0.08);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition: background 0.3s ease, transform 0.3s ease;
+      }
+
+      #turn-indicator.surge {
+        background: rgba(31, 111, 235, 0.25);
+        transform: translateY(-2px);
+      }
+
       #stats {
         margin-top: auto;
         font-size: 0.9rem;
         opacity: 0.9;
         line-height: 1.4;
+      }
+
+      #remaining-moves {
+        margin-top: 0.75rem;
+        display: grid;
+        grid-template-columns: auto auto;
+        gap: 0.35rem 0.5rem;
+        font-size: 0.85rem;
+        opacity: 0.85;
+      }
+
+      #remaining-moves .moves-label {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      #remaining-moves span[id^='moves-'] {
+        font-weight: 600;
+        justify-self: end;
+      }
+
+      #board-feedback {
+        margin-top: 1rem;
+        padding: 0.65rem 0.75rem;
+        border-radius: 0.6rem;
+        background: rgba(215, 58, 73, 0.35);
+        color: #ffe1e4;
+        font-size: 0.9rem;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+
+      #board-feedback.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      #board-feedback.info {
+        background: rgba(31, 111, 235, 0.25);
+        color: #dce9ff;
+      }
+
+      #board-feedback.success {
+        background: rgba(46, 204, 113, 0.25);
+        color: #ebfff3;
+      }
+
+      #board-feedback.warning {
+        background: rgba(255, 184, 108, 0.25);
+        color: #fff2e5;
+      }
+
+      #hotkeys-panel {
+        margin-top: 1.5rem;
+        padding: 0.9rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        font-size: 0.85rem;
+        display: grid;
+        gap: 0.4rem;
+      }
+
+      #hotkeys-panel h2 {
+        margin: 0;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      #hotkeys-panel ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      #hotkeys-panel kbd {
+        display: inline-block;
+        padding: 0.2rem 0.45rem;
+        border-radius: 0.4rem;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 0.75rem;
+        margin-right: 0.35rem;
+      }
+
+      #onboarding-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(5, 8, 18, 0.78);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+      }
+
+      #onboarding-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      #onboarding-card {
+        max-width: 520px;
+        padding: 2.2rem;
+        border-radius: 1.1rem;
+        background: rgba(19, 28, 50, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+        display: grid;
+        gap: 1rem;
+        color: #f5f7ff;
+        text-align: left;
+      }
+
+      #onboarding-card h2 {
+        margin: 0;
+        font-size: 1.4rem;
+      }
+
+      #onboarding-card ul {
+        margin: 0;
+        padding-left: 1.1rem;
+        display: grid;
+        gap: 0.45rem;
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.78);
+      }
+
+      #onboarding-card button {
+        justify-self: flex-start;
+        padding: 0.75rem 1.4rem;
+        border-radius: 0.65rem;
+        border: none;
+        background: #1f6feb;
+        color: #ffffff;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      #onboarding-card button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(31, 111, 235, 0.35);
       }
 
       #canvas-wrapper {
@@ -249,25 +398,27 @@
     </header>
     <div id="app">
       <aside id="panel">
-        <div class="slider-field">
+        <div class="slider-field" title="Adjust the number of rows (vertical size) for the board.">
           <label for="board-rows">Rows</label>
           <div class="slider-control">
             <input id="board-rows" type="range" min="5" max="20" step="1" value="10" />
             <span id="board-rows-value" class="slider-value">10</span>
           </div>
         </div>
-        <div class="slider-field">
+        <div class="slider-field" title="Adjust the number of columns (horizontal size) for the board.">
           <label for="board-cols">Columns</label>
           <div class="slider-control">
             <input id="board-cols" type="range" min="5" max="20" step="1" value="10" />
             <span id="board-cols-value" class="slider-value">10</span>
           </div>
         </div>
-        <label>
+        <label title="Enter a value to reproduce the same inactive-square layout.">
           Seed (optional)
           <input id="seed-input" type="text" placeholder="Random" />
         </label>
-        <label>
+        <label
+          title="Set the percentage of inactive squares (0–90%). Use the default button to return to 17–19% randomness."
+        >
           Inactive Squares (%)
           <input id="inactive-percentage" type="range" min="0" max="90" step="1" value="17" />
         </label>
@@ -289,12 +440,44 @@
           <button id="regenerate-btn" type="button">Regenerate Board</button>
           <button id="default-percentage-btn" type="button" class="secondary-button">Default 17–19%</button>
         </div>
+        <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
         <div id="stats">
           <div id="board-stats">Inactive squares: —</div>
+          <div id="remaining-moves" aria-live="polite">
+            <span class="moves-label">Horizontal moves</span>
+            <span id="moves-horizontal">—</span>
+            <span class="moves-label vertical">Vertical moves</span>
+            <span id="moves-vertical">—</span>
+          </div>
         </div>
+        <div id="hotkeys-panel">
+          <h2>Shortcuts</h2>
+          <ul>
+            <li><kbd>H</kbd> Highlight horizontal player</li>
+            <li><kbd>V</kbd> Highlight vertical player</li>
+            <li><kbd>R</kbd> Regenerate board</li>
+          </ul>
+        </div>
+        <div id="board-feedback" role="status" aria-live="polite"></div>
       </aside>
       <div id="canvas-wrapper">
         <canvas id="squart-canvas"></canvas>
+      </div>
+    </div>
+    <div id="onboarding-overlay" class="hidden">
+      <div id="onboarding-card">
+        <h2>Welcome to Squart</h2>
+        <p>
+          Squart extends Domineering: players alternate placing dominoes while inactive squares block both sides. Play
+          smart to limit your opponent.
+        </p>
+        <ul>
+          <li>Horizontal and Vertical players take turns automatically.</li>
+          <li>Inactive squares cannot be covered and appear at the start.</li>
+          <li>Use the sliders to explore different board shapes and inactive ratios.</li>
+          <li>Shortcuts and tooltips help you stay in flow.</li>
+        </ul>
+        <button id="onboarding-dismiss">Let&rsquo;s play</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

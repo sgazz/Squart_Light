@@ -2,10 +2,10 @@ import * as THREE from 'three';
 
 const CELL_SIZE = 1;
 const CELL_HEIGHT = 0.2;
-const INACTIVE_HEIGHT_MULTIPLIER = 2;
-const ACTIVE_COLOR = 0xffffff;
-const INACTIVE_COLOR = 0x555555;
-const GRID_COLOR = 0xeeeeee;
+const INACTIVE_HEIGHT_MULTIPLIER = 2.4;
+const ACTIVE_COLOR = 0xe6ebff;
+const INACTIVE_COLOR = 0x1c2340;
+const GRID_COLOR = 0x9fa9d1;
 const HORIZONTAL_DOMINO_COLOR = 0x1f6feb;
 const VERTICAL_DOMINO_COLOR = 0xd73a49;
 
@@ -50,16 +50,26 @@ export function buildBoardGroup(board) {
   const zOffset = (board.rows - 1) * CELL_SIZE * 0.5;
 
 const cellMeshes = [];
+  const inactiveWaveTargets = [];
 
   board.cells.forEach((rowCells, rowIndex) => {
     rowCells.forEach((cell, colIndex) => {
       const geometry = cell.isInactive ? inactiveGeometry : activeGeometry;
       const material = cell.isInactive ? inactiveMaterial : activeMaterial;
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(colIndex * CELL_SIZE - xOffset, 0, rowIndex * CELL_SIZE - zOffset);
+      mesh.position.set(colIndex * CELL_SIZE - xOffset, cell.isInactive ? -inactiveHeight : 0, rowIndex * CELL_SIZE - zOffset);
       mesh.userData = { row: cell.row, col: cell.col, isInactive: cell.isInactive };
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      if (cell.isInactive) {
+        inactiveWaveTargets.push({
+          mesh,
+          row: cell.row,
+          col: cell.col,
+          targetY: 0,
+          initialY: -inactiveHeight,
+        });
+      }
       cellMeshes.push(mesh);
       group.add(mesh);
     });
@@ -79,6 +89,7 @@ const cellMeshes = [];
       inactiveHeight,
       maxCellHeight: Math.max(CELL_HEIGHT, inactiveHeight),
     },
+    inactiveWaveTargets,
   };
 
   return group;
@@ -86,6 +97,9 @@ const cellMeshes = [];
 
 export function refreshBoardGroup(group, board) {
   const { cellMeshes } = group.userData ?? {};
+  const inactiveHeight = group.userData?.cellDimensions?.inactiveHeight ?? CELL_HEIGHT * INACTIVE_HEIGHT_MULTIPLIER;
+  const inactiveTargets = group.userData?.inactiveWaveTargets ?? [];
+  inactiveTargets.length = 0;
   if (!cellMeshes) {
     return;
   }
@@ -95,6 +109,16 @@ export function refreshBoardGroup(group, board) {
     const cell = board.cells[row][col];
     mesh.material = cell.isInactive ? inactiveMaterial : activeMaterial;
     mesh.userData.isInactive = cell.isInactive;
+    mesh.position.y = cell.isInactive ? -inactiveHeight : 0;
+    if (cell.isInactive) {
+      inactiveTargets.push({
+        mesh,
+        row: cell.row,
+        col: cell.col,
+        targetY: 0,
+        initialY: -inactiveHeight,
+      });
+    }
   });
 }
 
@@ -123,5 +147,7 @@ export function addDominoMesh(group, placement) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData = { placement };
+  mesh.scale.setScalar(0.1);
   dominoGroup.add(mesh);
+  return mesh;
 }
