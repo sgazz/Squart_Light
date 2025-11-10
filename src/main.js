@@ -16,8 +16,6 @@ const percentageDisplay = document.getElementById('percentage-display');
 const regenerateButton = document.getElementById('regenerate-btn');
 const defaultPercentageButton = document.getElementById('default-percentage-btn');
 const statsElement = document.getElementById('board-stats');
-const horizontalOrientationButton = document.getElementById('orientation-horizontal');
-const verticalOrientationButton = document.getElementById('orientation-vertical');
 const turnIndicator = document.getElementById('turn-indicator');
 const movesHorizontalElement = document.getElementById('moves-horizontal');
 const movesVerticalElement = document.getElementById('moves-vertical');
@@ -33,6 +31,8 @@ const ORIENTATION_LABELS = {
 const BOARD_FEEDBACK_DURATION = 2200;
 const REGENERATE_DEBOUNCE_MS = 250;
 const ONBOARDING_KEY = 'squart:onboarding:v1';
+const FAIRNESS_MAX_ABS_DIFF = 1;
+const FAIRNESS_MAX_ATTEMPTS = 40;
 
 const scene = new THREE.Scene();
 scene.background = createBackgroundTexture();
@@ -76,6 +76,7 @@ let regenerateTimeoutId = null;
 let feedbackTimeoutId = null;
 const dominoAnimations = [];
 const inactiveAnimations = [];
+let lastFairnessInfo = null;
 
 function init() {
   initDimensionSliders();
@@ -122,20 +123,57 @@ function regenerateBoard() {
   clearWinnerBanner();
   const rows = Number(rowSlider.value);
   const cols = Number(colSlider.value);
-  const seed = seedInput.value.trim() || undefined;
+  const seedValue = seedInput.value.trim();
+  const seed = seedValue ? seedValue : undefined;
 
-  boardData = generateBoard({
+  const { board, stats, attempts } = generateBalancedBoard({
     rows,
     cols,
     seed,
     inactivePercentage: customInactivePercentage ?? undefined,
   });
+
+  boardData = board;
+  lastFairnessInfo = {
+    horizontalMoves: stats.horizontalMoves,
+    verticalMoves: stats.verticalMoves,
+    diff: stats.diff,
+    attempts,
+    seedProvided: Boolean(seed),
+  };
+
   updateBoardGroup();
   updateOrientationDisplay();
   updateStats();
   updateRemainingMoves();
   syncWinnerBanner();
   updateCamera(rows, cols);
+
+  if (lastFairnessInfo.seedProvided) {
+    if (lastFairnessInfo.diff > FAIRNESS_MAX_ABS_DIFF) {
+      showFeedback(
+        `Seed ${seed} yields imbalance (Δ=${lastFairnessInfo.diff}). Try another seed for equal chances.`,
+        'warning'
+      );
+    } else {
+      showFeedback('Board updated with current seed.', 'info', 1200);
+    }
+  } else if (lastFairnessInfo.diff <= FAIRNESS_MAX_ABS_DIFF) {
+    if (lastFairnessInfo.attempts > 1) {
+      showFeedback(
+        `Balanced board after ${lastFairnessInfo.attempts} attempts (Δ=${lastFairnessInfo.diff}).`,
+        'info',
+        1500
+      );
+    } else {
+      showFeedback('Board updated (balanced moves).', 'success', 1200);
+    }
+  } else {
+    showFeedback(
+      `Closest balance found (Δ=${lastFairnessInfo.diff}). Adjust inactive percentage if needed.`,
+      'warning'
+    );
+  }
 }
 
 function updateBoardGroup() {
@@ -152,29 +190,16 @@ function updateBoardGroup() {
 }
 
 function updateOrientationDisplay() {
-  horizontalOrientationButton.classList.remove('active', 'winner');
-  verticalOrientationButton.classList.remove('active', 'winner');
-
   if (!boardData) {
     updateTurnIndicator();
     return;
   }
 
   if (boardData.status === GAME_STATUS.FINISHED) {
-    if (boardData.winner === ORIENTATION.HORIZONTAL) {
-      horizontalOrientationButton.classList.add('winner');
-    } else if (boardData.winner === ORIENTATION.VERTICAL) {
-      verticalOrientationButton.classList.add('winner');
-    }
     updateTurnIndicator();
     return;
   }
 
-  if (boardData.currentPlayer === ORIENTATION.HORIZONTAL) {
-    horizontalOrientationButton.classList.add('active');
-  } else if (boardData.currentPlayer === ORIENTATION.VERTICAL) {
-    verticalOrientationButton.classList.add('active');
-  }
   updateTurnIndicator();
 }
 
@@ -202,7 +227,15 @@ function updateStats() {
         : '<strong>Result: Draw</strong>'
       : 'Game status: <strong>In progress</strong>';
 
-  statsElement.innerHTML = `${baseInfo}<br />${modeInfo}<br />${statusInfo}`;
+  const fairnessInfo = lastFairnessInfo
+    ? `Move balance: <strong>Δ=${lastFairnessInfo.diff}</strong> (H=${lastFairnessInfo.horizontalMoves}, V=${lastFairnessInfo.verticalMoves}${
+        lastFairnessInfo.attempts > 1 ? `, attempts ${lastFairnessInfo.attempts}` : ''
+      }${lastFairnessInfo.seedProvided ? ', seed' : ''})`
+    : '';
+
+  statsElement.innerHTML = `${baseInfo}<br />${modeInfo}<br />${statusInfo}${
+    fairnessInfo ? `<br />${fairnessInfo}` : ''
+  }`;
 }
 
 function updateCamera(rows, cols) {
@@ -249,6 +282,40 @@ function handleDimensionChange() {
   scheduleRegenerateBoard();
 }
 
+function generateBalancedBoard({ rows, cols, seed, inactivePercentage }) {
+  if (seed !== undefined) {
+    const board = generateBoard({ rows, cols, seed, inactivePercentage });
+    const stats = measureMoveBalance(board);
+    return { board, stats, attempts: 1 };
+  }
+
+  let bestBoard = null;
+  let bestStats = null;
+  let bestDiff = Infinity;
+
+  for (let attempt = 1; attempt <= FAIRNESS_MAX_ATTEMPTS; attempt += 1) {
+    const board = generateBoard({ rows, cols, inactivePercentage });
+    const stats = measureMoveBalance(board);
+    if (stats.diff < bestDiff) {
+      bestBoard = board;
+      bestStats = stats;
+      bestDiff = stats.diff;
+    }
+    if (stats.diff <= FAIRNESS_MAX_ABS_DIFF) {
+      return { board, stats, attempts: attempt };
+    }
+  }
+
+  return { board: bestBoard, stats: bestStats, attempts: FAIRNESS_MAX_ATTEMPTS };
+}
+
+function measureMoveBalance(board) {
+  const horizontalMoves = countAvailableMoves(board, ORIENTATION.HORIZONTAL);
+  const verticalMoves = countAvailableMoves(board, ORIENTATION.VERTICAL);
+  const diff = Math.abs(horizontalMoves - verticalMoves);
+  return { horizontalMoves, verticalMoves, diff };
+}
+
 function updateDimensionDisplay() {
   rowValue.textContent = `${rowSlider.value}`;
   colValue.textContent = `${colSlider.value}`;
@@ -262,7 +329,6 @@ function scheduleRegenerateBoard(immediate = false) {
 
   if (immediate) {
     regenerateBoard();
-    showFeedback('Board updated', 'info', 1200);
     return;
   }
 
@@ -495,8 +561,8 @@ function queueInactiveWave(group, board) {
       mesh: target.mesh,
       start: baseTime + delay,
       duration: 420,
-      from: target.initialY ?? target.mesh.position.y,
-      to: target.targetY ?? 0,
+      fromScale: target.initialScale ?? target.mesh.scale.y,
+      toScale: target.targetScale ?? 1,
     });
   });
 }
@@ -509,10 +575,10 @@ function updateInactiveAnimations(now) {
     }
     const progress = Math.min((now - anim.start) / anim.duration, 1);
     const eased = 1 - Math.pow(1 - progress, 2.2);
-    const y = anim.from + (anim.to - anim.from) * eased;
-    anim.mesh.position.y = y;
+    const scale = anim.fromScale + (anim.toScale - anim.fromScale) * eased;
+    anim.mesh.scale.y = scale;
     if (progress >= 1) {
-      anim.mesh.position.y = anim.to;
+      anim.mesh.scale.y = anim.toScale;
       inactiveAnimations.splice(i, 1);
     }
   }
@@ -530,11 +596,9 @@ function handleShortcutKeys(event) {
       scheduleRegenerateBoard(true);
       break;
     case 'h':
-      flashOrientationButton(horizontalOrientationButton);
       showFeedback('Horizontal player places horizontal dominoes automatically.', 'info', 1500);
       break;
     case 'v':
-      flashOrientationButton(verticalOrientationButton);
       showFeedback('Vertical player places vertical dominoes automatically.', 'info', 1500);
       break;
     case 'escape':
@@ -546,11 +610,7 @@ function handleShortcutKeys(event) {
 }
 
 function flashOrientationButton(button) {
-  if (!button) {
-    return;
-  }
-  button.classList.add('flash');
-  window.setTimeout(() => button.classList.remove('flash'), 600);
+  // placeholder no-op since the orientation buttons were removed
 }
 
 function showOnboardingIfNeeded() {

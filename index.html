@@ -145,47 +145,6 @@
         gap: 0.75rem;
       }
 
-      .orientation-group {
-        gap: 0.75rem;
-      }
-
-      .orientation-button {
-        flex: 1;
-        font-weight: 600;
-        pointer-events: none;
-        opacity: 0.85;
-        transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
-      }
-
-      .orientation-button.horizontal {
-        background: rgba(31, 111, 235, 0.15);
-        border-color: rgba(31, 111, 235, 0.35);
-        color: #f3f6ff;
-        opacity: 0.55;
-      }
-
-      .orientation-button.vertical {
-        background: rgba(215, 58, 73, 0.15);
-        border-color: rgba(215, 58, 73, 0.35);
-        color: #ffeaea;
-        opacity: 0.55;
-      }
-
-      .orientation-button.active {
-        opacity: 1;
-        transform: scale(1.02);
-        box-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
-      }
-
-      .orientation-button.flash {
-        transform: scale(1.04);
-        box-shadow: 0 0 22px rgba(255, 255, 255, 0.4);
-      }
-
-      .orientation-button.winner {
-        box-shadow: 0 0 22px rgba(255, 255, 255, 0.45);
-      }
-
       #percentage-display {
         font-size: 0.9rem;
         opacity: 0.85;
@@ -423,19 +382,6 @@
           <input id="inactive-percentage" type="range" min="0" max="90" step="1" value="17" />
         </label>
         <div id="percentage-display">Default random (17–19%)</div>
-        <div class="button-group orientation-group">
-          <button
-            id="orientation-horizontal"
-            type="button"
-            class="orientation-button horizontal active"
-            disabled
-          >
-            Horizontal (Blue)
-          </button>
-          <button id="orientation-vertical" type="button" class="orientation-button vertical" disabled>
-            Vertical (Red)
-          </button>
-        </div>
         <div class="button-group">
           <button id="regenerate-btn" type="button">Regenerate Board</button>
           <button id="default-percentage-btn" type="button" class="secondary-button">Default 17–19%</button>
