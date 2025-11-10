@@ -14,6 +14,16 @@ const inactiveMaterial = new THREE.MeshStandardMaterial({ color: INACTIVE_COLOR 
 const horizontalDominoMaterial = new THREE.MeshStandardMaterial({ color: HORIZONTAL_DOMINO_COLOR });
 const verticalDominoMaterial = new THREE.MeshStandardMaterial({ color: VERTICAL_DOMINO_COLOR });
 
+const DOMINO_DIMENSIONS = {
+  horizontal: { width: CELL_SIZE * 1.95, height: CELL_HEIGHT * 1.2, depth: CELL_SIZE * 0.95 },
+  vertical: { width: CELL_SIZE * 0.95, height: CELL_HEIGHT * 1.2, depth: CELL_SIZE * 1.95 },
+};
+
+const DOMINO_MATERIALS = {
+  horizontal: horizontalDominoMaterial,
+  vertical: verticalDominoMaterial,
+};
+
 export function buildBoardGroup(board) {
   const group = new THREE.Group();
   group.name = 'squart-board';
@@ -88,20 +98,20 @@ export function refreshBoardGroup(group, board) {
   });
 }
 
-export function addDominoMesh(group, board, placement) {
+export function addDominoMesh(group, placement) {
   const { dominoGroup, offsets } = group.userData ?? {};
   if (!dominoGroup || !offsets) {
     return;
   }
 
-  const geometry =
-    placement.orientation === 'horizontal'
-      ? new THREE.BoxGeometry(CELL_SIZE * 1.95, CELL_HEIGHT * 1.2, CELL_SIZE * 0.95)
-      : new THREE.BoxGeometry(CELL_SIZE * 0.95, CELL_HEIGHT * 1.2, CELL_SIZE * 1.95);
-  geometry.translate(0, CELL_HEIGHT / 2, 0);
+  const dimensions = DOMINO_DIMENSIONS[placement.orientation];
+  const material = DOMINO_MATERIALS[placement.orientation];
+  if (!dimensions || !material) {
+    return;
+  }
 
-  const material =
-    placement.orientation === 'horizontal' ? horizontalDominoMaterial : verticalDominoMaterial;
+  const geometry = new THREE.BoxGeometry(dimensions.width, dimensions.height, dimensions.depth);
+  geometry.translate(0, CELL_HEIGHT / 2, 0);
 
   const mesh = new THREE.Mesh(geometry, material);
   const [first, second] = placement.positions;

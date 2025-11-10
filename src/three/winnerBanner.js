@@ -6,6 +6,10 @@ const DEFAULT_TEXT_COLOR = '#ffffff';
 const BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.6)';
 const STROKE_COLOR = 'rgba(0, 0, 0, 0.3)';
 const FONT = "bold 96px 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+const BANNER_PADDING_X = 48;
+const BANNER_PADDING_Y = 32;
+const CORNER_RADIUS = 32;
+const STROKE_WIDTH = 6;
 
 function createCanvasContext() {
   const canvas = document.createElement('canvas');
@@ -18,18 +22,16 @@ function createCanvasContext() {
 function drawBanner(context, text, color) {
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  const paddingX = 48;
-  const paddingY = 32;
-  const bannerWidth = CANVAS_WIDTH - paddingX * 2;
-  const bannerHeight = CANVAS_HEIGHT - paddingY * 2;
+  const bannerWidth = CANVAS_WIDTH - BANNER_PADDING_X * 2;
+  const bannerHeight = CANVAS_HEIGHT - BANNER_PADDING_Y * 2;
 
   context.fillStyle = BACKGROUND_COLOR;
-  roundRect(context, paddingX, paddingY, bannerWidth, bannerHeight, 32);
+  context.beginPath();
+  roundRect(context, BANNER_PADDING_X, BANNER_PADDING_Y, bannerWidth, bannerHeight, CORNER_RADIUS);
   context.fill();
 
   context.strokeStyle = STROKE_COLOR;
-  context.lineWidth = 6;
-  roundRect(context, paddingX, paddingY, bannerWidth, bannerHeight, 32);
+  context.lineWidth = STROKE_WIDTH;
   context.stroke();
 
   context.fillStyle = color || DEFAULT_TEXT_COLOR;

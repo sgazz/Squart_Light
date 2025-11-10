@@ -1,14 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import {
-  generateBoard,
-  ORIENTATION,
-  GAME_STATUS,
-  placeDomino,
-  evaluateGameStatus,
-} from './game/board.js';
+import { generateBoard, ORIENTATION, GAME_STATUS, placeDomino } from './game/board.js';
 import { buildBoardGroup, addDominoMesh } from './three/boardRenderer.js';
 import { createWinnerBanner, updateWinnerBanner, disposeWinnerBanner } from './three/winnerBanner.js';
+import { CompassOverlay } from './three/compassOverlay.js';
 
 const canvasWrapper = document.getElementById('canvas-wrapper');
 const canvas = document.getElementById('squart-canvas');
@@ -31,7 +26,8 @@ const ORIENTATION_LABELS = {
 };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+scene.background = createBackgroundTexture();
+scene.fog = new THREE.Fog(0x050812, 20, 80);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.shadowMap.enabled = true;
@@ -43,7 +39,10 @@ controls.enableDamping = true;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const hemiLight = new THREE.HemisphereLight(0x7aa8ff, 0x0b0f1c, 0.45);
+scene.add(hemiLight);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
 keyLight.position.set(5, 10, 5);
 keyLight.castShadow = true;
 scene.add(keyLight);
@@ -56,6 +55,7 @@ let boardGroup = null;
 let cellMeshes = [];
 let customInactivePercentage = null;
 let winnerBanner = null;
+const compass = new CompassOverlay();
 
 function init() {
   initDimensionSliders();
@@ -98,13 +98,12 @@ function regenerateBoard() {
     seed,
     inactivePercentage: customInactivePercentage ?? undefined,
   });
-  boardData = evaluateGameStatus(boardData);
-
   updateBoardGroup();
   updateOrientationDisplay();
   updateStats();
   syncWinnerBanner();
   updateCamera(rows, cols);
+  compass.updateBoardSize(rows, cols);
 }
 
 function updateBoardGroup() {
@@ -250,7 +249,7 @@ function tryPlaceDomino(row, col) {
     return;
   }
 
-  addDominoMesh(boardGroup, boardData, placement);
+  addDominoMesh(boardGroup, placement);
   updateOrientationDisplay();
   updateStats();
   syncWinnerBanner();
@@ -259,6 +258,7 @@ function tryPlaceDomino(row, col) {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  compass.updateFromCamera(camera);
   renderer.render(scene, camera);
 }
 
@@ -308,3 +308,35 @@ function clearWinnerBanner() {
 }
 
 init();
+
+function createBackgroundTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, '#243d7b');
+  gradient.addColorStop(0.4, '#1b2f5d');
+  gradient.addColorStop(0.75, '#0d1530');
+  gradient.addColorStop(1, '#050812');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const glow = ctx.createRadialGradient(
+    canvas.width * 0.5,
+    canvas.height * 0.28,
+    0,
+    canvas.width * 0.5,
+    canvas.height * 0.28,
+    canvas.width * 0.6
+  );
+  glow.addColorStop(0, 'rgba(255, 184, 108, 0.35)');
+  glow.addColorStop(1, 'rgba(255, 184, 108, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace ?? undefined;
+  return texture;
+}

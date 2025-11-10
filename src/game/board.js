@@ -104,36 +104,34 @@ export function placeDomino(board, start, orientation = board.currentPlayer) {
   return placement;
 }
 
+// Precomputed offsets allow us to describe domino coverage declaratively per orientation.
+const ORIENTATION_OFFSETS = {
+  [ORIENTATION.HORIZONTAL]: [
+    { row: 0, col: 0 },
+    { row: 0, col: 1 },
+  ],
+  [ORIENTATION.VERTICAL]: [
+    { row: 0, col: 0 },
+    { row: 1, col: 0 },
+  ],
+};
+
 function resolveDominoPositions(board, start, orientation) {
-  if (!start || typeof start.row !== 'number' || typeof start.col !== 'number') {
+  if (!start || !Number.isInteger(start.row) || !Number.isInteger(start.col)) {
     return null;
   }
 
-  const { row, col } = start;
-
-  if (orientation === ORIENTATION.HORIZONTAL) {
-    const secondCol = col + 1;
-    if (secondCol >= board.cols) {
-      return null;
-    }
-    return [
-      { row, col },
-      { row, col: secondCol },
-    ];
+  const offsets = ORIENTATION_OFFSETS[orientation];
+  if (!offsets) {
+    return null;
   }
 
-  if (orientation === ORIENTATION.VERTICAL) {
-    const secondRow = row + 1;
-    if (secondRow >= board.rows) {
-      return null;
-    }
-    return [
-      { row, col },
-      { row: secondRow, col },
-    ];
-  }
+  const positions = offsets.map(({ row: dRow, col: dCol }) => ({
+    row: start.row + dRow,
+    col: start.col + dCol,
+  }));
 
-  return null;
+  return positions.every(({ row, col }) => isWithinBounds(board, row, col)) ? positions : null;
 }
 
 function determineInactiveCount(totalSquares, random, percentageOverride) {
@@ -256,34 +254,18 @@ export function hasAvailableMove(board, orientation) {
     return false;
   }
 
-  if (orientation === ORIENTATION.HORIZONTAL) {
-    for (let row = 0; row < board.rows; row += 1) {
-      for (let col = 0; col < board.cols - 1; col += 1) {
-        const positions = [
-          { row, col },
-          { row, col: col + 1 },
-        ];
-        if (canPlaceDomino(board, positions)) {
-          return true;
-        }
-      }
-    }
+  const offsets = ORIENTATION_OFFSETS[orientation];
+  if (!offsets) {
     return false;
   }
 
-  if (orientation === ORIENTATION.VERTICAL) {
-    for (let row = 0; row < board.rows - 1; row += 1) {
-      for (let col = 0; col < board.cols; col += 1) {
-        const positions = [
-          { row, col },
-          { row: row + 1, col },
-        ];
-        if (canPlaceDomino(board, positions)) {
-          return true;
-        }
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      const positions = resolveDominoPositions(board, { row, col }, orientation);
+      if (positions && canPlaceDomino(board, positions)) {
+        return true;
       }
     }
-    return false;
   }
 
   return false;
@@ -320,4 +302,9 @@ export function evaluateGameStatus(board) {
   board.winner = null;
   board.currentPlayer = null;
   return board;
+}
+
+function isWithinBounds(board, row, col) {
+  // Centralised bounds check keeps `resolveDominoPositions` and other callers consistent.
+  return row >= 0 && row < board.rows && col >= 0 && col < board.cols;
 }
