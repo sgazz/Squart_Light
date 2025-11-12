@@ -47,7 +47,7 @@
         gap: 1rem;
       }
 
-      #panel label {
+      .panel-label {
         display: flex;
         flex-direction: column;
         gap: 0.35rem;
@@ -81,7 +81,7 @@
         letter-spacing: 0.04em;
       }
 
-      .slider-field label {
+      .slider-field .panel-label {
         font-size: 0.85rem;
         padding: 0;
         border: none;
@@ -170,6 +170,7 @@
         font-size: 0.9rem;
         opacity: 0.9;
         line-height: 1.4;
+        display: none;
       }
 
       #remaining-moves {
@@ -234,6 +235,7 @@
         font-size: 0.85rem;
         display: grid;
         gap: 0.4rem;
+        display: none;
       }
 
       #hotkeys-panel h2 {
@@ -358,24 +360,25 @@
     <div id="app">
       <aside id="panel">
         <div class="slider-field" title="Adjust the number of rows (vertical size) for the board.">
-          <label for="board-rows">Rows</label>
+          <label class="panel-label" for="board-rows">Rows</label>
           <div class="slider-control">
             <input id="board-rows" type="range" min="5" max="20" step="1" value="10" />
             <span id="board-rows-value" class="slider-value">10</span>
           </div>
         </div>
         <div class="slider-field" title="Adjust the number of columns (horizontal size) for the board.">
-          <label for="board-cols">Columns</label>
+          <label class="panel-label" for="board-cols">Columns</label>
           <div class="slider-control">
             <input id="board-cols" type="range" min="5" max="20" step="1" value="10" />
             <span id="board-cols-value" class="slider-value">10</span>
           </div>
         </div>
-        <label title="Enter a value to reproduce the same inactive-square layout.">
+        <label class="panel-label" title="Enter a value to reproduce the same inactive-square layout.">
           Seed (optional)
           <input id="seed-input" type="text" placeholder="Random" />
         </label>
         <label
+          class="panel-label"
           title="Set the percentage of inactive squares (0–90%). Use the default button to return to 17–19% randomness."
         >
           Inactive Squares (%)
@@ -392,7 +395,7 @@
           <div id="remaining-moves" aria-live="polite">
             <span class="moves-label">Horizontal moves</span>
             <span id="moves-horizontal">—</span>
-            <span class="moves-label vertical">Vertical moves</span>
+            <span class="moves-label">Vertical moves</span>
             <span id="moves-vertical">—</span>
           </div>
         </div>

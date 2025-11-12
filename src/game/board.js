@@ -254,21 +254,7 @@ export function hasAvailableMove(board, orientation) {
     return false;
   }
 
-  const offsets = ORIENTATION_OFFSETS[orientation];
-  if (!offsets) {
-    return false;
-  }
-
-  for (let row = 0; row < board.rows; row += 1) {
-    for (let col = 0; col < board.cols; col += 1) {
-      const positions = resolveDominoPositions(board, { row, col }, orientation);
-      if (positions && canPlaceDomino(board, positions)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return iteratePlacements(board, orientation, (positions) => canPlaceDomino(board, positions));
 }
 
 export function countAvailableMoves(board, orientation) {
@@ -276,20 +262,13 @@ export function countAvailableMoves(board, orientation) {
     return 0;
   }
 
-  const offsets = ORIENTATION_OFFSETS[orientation];
-  if (!offsets) {
-    return 0;
-  }
-
   let count = 0;
-  for (let row = 0; row < board.rows; row += 1) {
-    for (let col = 0; col < board.cols; col += 1) {
-      const positions = resolveDominoPositions(board, { row, col }, orientation);
-      if (positions && canPlaceDomino(board, positions)) {
-        count += 1;
-      }
+  iteratePlacements(board, orientation, (positions) => {
+    if (canPlaceDomino(board, positions)) {
+      count += 1;
     }
-  }
+    return false;
+  });
 
   return count;
 }
@@ -330,4 +309,22 @@ export function evaluateGameStatus(board) {
 function isWithinBounds(board, row, col) {
   // Centralised bounds check keeps `resolveDominoPositions` and other callers consistent.
   return row >= 0 && row < board.rows && col >= 0 && col < board.cols;
+}
+
+function iteratePlacements(board, orientation, visitor) {
+  const offsets = ORIENTATION_OFFSETS[orientation];
+  if (!offsets) {
+    return false;
+  }
+
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      const positions = resolveDominoPositions(board, { row, col }, orientation);
+      if (positions && visitor(positions, row, col)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }

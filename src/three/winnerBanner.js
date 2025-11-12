@@ -45,18 +45,12 @@ function drawBanner(context, text, color) {
 
 export function createWinnerBanner({ text, color, width }) {
   const { canvas, context } = createCanvasContext();
-  drawBanner(context, text, color);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.anisotropy = 8;
-
+  const texture = createTexture(canvas);
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const sprite = new THREE.Sprite(material);
   sprite.userData = { canvas, context, texture };
 
-  applyScale(sprite, width);
+  renderBanner(sprite, { text, color, width });
   return sprite;
 }
 
@@ -65,10 +59,7 @@ export function updateWinnerBanner(sprite, { text, color, width }) {
     return;
   }
 
-  const { context, texture } = sprite.userData;
-  drawBanner(context, text, color);
-  texture.needsUpdate = true;
-  applyScale(sprite, width);
+  renderBanner(sprite, { text, color, width });
 }
 
 export function disposeWinnerBanner(sprite) {
@@ -104,4 +95,19 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
+}
+
+function createTexture(canvas) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+function renderBanner(sprite, { text, color, width }) {
+  const { context, texture } = sprite.userData;
+  drawBanner(context, text, color);
+  texture.needsUpdate = true;
+  applyScale(sprite, width);
 }

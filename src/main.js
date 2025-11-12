@@ -143,7 +143,7 @@ function regenerateBoard() {
   };
 
   updateBoardGroup();
-  updateOrientationDisplay();
+  updateTurnIndicator();
   updateStats();
   updateRemainingMoves();
   syncWinnerBanner();
@@ -187,20 +187,6 @@ function updateBoardGroup() {
   dominoAnimations.length = 0;
   inactiveAnimations.length = 0;
   queueInactiveWave(boardGroup, boardData);
-}
-
-function updateOrientationDisplay() {
-  if (!boardData) {
-    updateTurnIndicator();
-    return;
-  }
-
-  if (boardData.status === GAME_STATUS.FINISHED) {
-    updateTurnIndicator();
-    return;
-  }
-
-  updateTurnIndicator();
 }
 
 function updateStats() {
@@ -453,7 +439,7 @@ function tryPlaceDomino(row, col) {
   if (mesh) {
     queueDominoAnimation(mesh);
   }
-  updateOrientationDisplay();
+  updateTurnIndicator();
   updateStats();
   updateRemainingMoves();
   syncWinnerBanner();
@@ -463,8 +449,9 @@ function tryPlaceDomino(row, col) {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  updateInactiveAnimations(performance.now());
-  updateDominoAnimations(performance.now());
+  const now = performance.now();
+  updateInactiveAnimations(now);
+  updateDominoAnimations(now);
   renderer.render(scene, camera);
 }
 
@@ -607,10 +594,6 @@ function handleShortcutKeys(event) {
     default:
       break;
   }
-}
-
-function flashOrientationButton(button) {
-  // placeholder no-op since the orientation buttons were removed
 }
 
 function showOnboardingIfNeeded() {

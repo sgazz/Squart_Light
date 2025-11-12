@@ -59,8 +59,6 @@ export function buildBoardGroup(board) {
   board.cells.forEach((rowCells, rowIndex) => {
     rowCells.forEach((cell, colIndex) => {
       const isInactive = cell.isInactive;
-      const geometry = isInactive ? inactiveGeometry : activeGeometry;
-      const material = isInactive ? inactiveMaterial : activeMaterial;
       const mesh = isInactive
         ? createBuildingMesh({
             geometry: inactiveGeometry,
@@ -129,7 +127,6 @@ export function refreshBoardGroup(group, board) {
     mesh.userData.isInactive = cell.isInactive;
     if (cell.isInactive) {
       const buildingBody = mesh.userData?.buildingBody;
-      updateBuildingWindows(mesh, cell.row, cell.col);
       if (buildingBody) {
         const initialScale = 0.05;
         const targetScale = 1;
@@ -193,59 +190,10 @@ function createBuildingMesh({ geometry, bodyMaterial, row, col, scale = 1 }) {
 
   building.userData = {
     buildingBody: body,
-    dimensions: geometry.parameters,
     row,
     col,
-    seed: generateWindowSeed(row, col),
     scale,
   };
-  building.userData.buildingBody = body;
-  building.userData.windowGroup = null;
 
   return building;
-}
-
-function refreshBuildingWindows(building) {
-  // no-op: windows removed
-}
-
-function updateBuildingWindows(building, row, col) {
-  // no-op since windows removed
-}
-
-function createWindowMesh(geometry, random) {
-  const windowMaterial = new THREE.MeshStandardMaterial({
-    color: random() < 0.6 ? 0xffd37b : 0x4b92ff,
-    emissive: random() < 0.6 ? 0x332200 : 0x09214f,
-    emissiveIntensity: random() < 0.6 ? 0.42 : 0.28,
-    roughness: 0.25,
-    transparent: true,
-    opacity: 0.95,
-  });
-
-  const pane = new THREE.Mesh(geometry, windowMaterial);
-  pane.castShadow = false;
-  pane.receiveShadow = false;
-
-  return pane;
-}
-
-function generateWindowSeed(row, col) {
-  return `${row}:${col}`;
-}
-
-function seededRandom(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return function () {
-    h += (h << 13) >>> 0;
-    h ^= h >>> 7;
-    h += (h << 3) >>> 0;
-    h ^= h >>> 17;
-    h += (h << 5) >>> 0;
-    return ((h >>> 0) % 1000) / 1000;
-  };
 }
