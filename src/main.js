@@ -15,6 +15,7 @@ const percentageSlider = document.getElementById('inactive-percentage');
 const percentageDisplay = document.getElementById('percentage-display');
 const regenerateButton = document.getElementById('regenerate-btn');
 const defaultPercentageButton = document.getElementById('default-percentage-btn');
+const guideButton = document.getElementById('guide-btn');
 const statsElement = document.getElementById('board-stats');
 const turnIndicator = document.getElementById('turn-indicator');
 const movesHorizontalElement = document.getElementById('moves-horizontal');
@@ -22,6 +23,8 @@ const movesVerticalElement = document.getElementById('moves-vertical');
 const boardFeedback = document.getElementById('board-feedback');
 const onboardingOverlay = document.getElementById('onboarding-overlay');
 const onboardingDismiss = document.getElementById('onboarding-dismiss');
+const guideOverlay = document.getElementById('guide-overlay');
+const guideDismiss = document.getElementById('guide-dismiss');
 
 const ORIENTATION_LABELS = {
   [ORIENTATION.HORIZONTAL]: 'Horizontal (Blue)',
@@ -89,6 +92,19 @@ function init() {
   rowSlider.addEventListener('input', handleDimensionChange);
   colSlider.addEventListener('input', handleDimensionChange);
   document.addEventListener('keydown', handleShortcutKeys);
+  if (guideButton) {
+    guideButton.addEventListener('click', showGuideOverlay);
+  }
+  if (guideDismiss) {
+    guideDismiss.addEventListener('click', hideGuideOverlay);
+  }
+  if (guideOverlay) {
+    guideOverlay.addEventListener('click', (event) => {
+      if (event.target === guideOverlay) {
+        hideGuideOverlay();
+      }
+    });
+  }
   if (onboardingDismiss) {
     onboardingDismiss.addEventListener('click', () => hideOnboarding(true));
   }
@@ -588,8 +604,12 @@ function handleShortcutKeys(event) {
     case 'v':
       showFeedback('Vertical player places vertical dominoes automatically.', 'info', 1500);
       break;
+    case 'g':
+      showGuideOverlay();
+      break;
     case 'escape':
       hideOnboarding(false);
+      hideGuideOverlay();
       break;
     default:
       break;
@@ -620,6 +640,20 @@ function hideOnboarding(persist = false) {
       console.warn('Unable to persist onboarding state', error);
     }
   }
+}
+
+function showGuideOverlay() {
+  if (!guideOverlay) {
+    return;
+  }
+  guideOverlay.classList.remove('hidden');
+}
+
+function hideGuideOverlay() {
+  if (!guideOverlay) {
+    return;
+  }
+  guideOverlay.classList.add('hidden');
 }
 
 function createBackgroundTexture() {

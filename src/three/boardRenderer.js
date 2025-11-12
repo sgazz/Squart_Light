@@ -15,8 +15,8 @@ const inactiveMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.18,
   roughness: 0.45,
 });
-const horizontalDominoMaterial = new THREE.MeshStandardMaterial({ color: HORIZONTAL_DOMINO_COLOR });
-const verticalDominoMaterial = new THREE.MeshStandardMaterial({ color: VERTICAL_DOMINO_COLOR });
+const horizontalDominoMaterials = createDominoMaterials(HORIZONTAL_DOMINO_COLOR, 'H');
+const verticalDominoMaterials = createDominoMaterials(VERTICAL_DOMINO_COLOR, 'V');
 
 const DOMINO_DIMENSIONS = {
   horizontal: { width: CELL_SIZE * 1.95, height: CELL_HEIGHT * 1.2, depth: CELL_SIZE * 0.95 },
@@ -24,8 +24,8 @@ const DOMINO_DIMENSIONS = {
 };
 
 const DOMINO_MATERIALS = {
-  horizontal: horizontalDominoMaterial,
-  vertical: verticalDominoMaterial,
+  horizontal: horizontalDominoMaterials,
+  vertical: verticalDominoMaterials,
 };
 
 export function buildBoardGroup(board) {
@@ -155,15 +155,15 @@ export function addDominoMesh(group, placement) {
   }
 
   const dimensions = DOMINO_DIMENSIONS[placement.orientation];
-  const material = DOMINO_MATERIALS[placement.orientation];
-  if (!dimensions || !material) {
+  const materials = DOMINO_MATERIALS[placement.orientation];
+  if (!dimensions || !materials) {
     return;
   }
 
   const geometry = new THREE.BoxGeometry(dimensions.width, dimensions.height, dimensions.depth);
   geometry.translate(0, CELL_HEIGHT / 2, 0);
 
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(geometry, materials);
   const [first, second] = placement.positions;
   const x1 = first.col * CELL_SIZE - offsets.xOffset;
   const z1 = first.row * CELL_SIZE - offsets.zOffset;
@@ -196,4 +196,52 @@ function createBuildingMesh({ geometry, bodyMaterial, row, col, scale = 1 }) {
   };
 
   return building;
+}
+
+function createDominoMaterials(color, label) {
+  const bumpMap = createDominoBumpTexture(label);
+  const sideMaterial = new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0.2,
+    roughness: 0.45,
+  });
+  const topMaterial = new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0.2,
+    roughness: 0.4,
+    bumpMap,
+    bumpScale: 1,
+  });
+
+  return [
+    sideMaterial, // +x
+    sideMaterial, // -x
+    topMaterial, // +y (top)
+    sideMaterial, // -y (bottom)
+    sideMaterial, // +z
+    sideMaterial, // -z
+  ];
+}
+
+function createDominoBumpTexture(label) {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = "bold 200px 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, size / 2, size / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 1);
+  return texture;
 }

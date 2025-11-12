@@ -226,6 +226,15 @@
         color: #fff2e5;
       }
 
+      #panel-footer {
+        margin-top: auto;
+        display: flex;
+      }
+
+      #panel-footer button {
+        width: 100%;
+      }
+
       #hotkeys-panel {
         margin-top: 1.5rem;
         padding: 0.9rem 1rem;
@@ -264,7 +273,7 @@
         margin-right: 0.35rem;
       }
 
-      #onboarding-overlay {
+      .overlay {
         position: fixed;
         inset: 0;
         background: rgba(5, 8, 18, 0.78);
@@ -275,13 +284,13 @@
         transition: opacity 0.3s ease, visibility 0.3s ease;
       }
 
-      #onboarding-overlay.hidden {
+      .overlay.hidden {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
       }
 
-      #onboarding-card {
+      .overlay-card {
         max-width: 520px;
         padding: 2.2rem;
         border-radius: 1.1rem;
@@ -294,12 +303,12 @@
         text-align: left;
       }
 
-      #onboarding-card h2 {
+      .overlay-card h2 {
         margin: 0;
         font-size: 1.4rem;
       }
 
-      #onboarding-card ul {
+      .overlay-card ul {
         margin: 0;
         padding-left: 1.1rem;
         display: grid;
@@ -308,7 +317,7 @@
         color: rgba(255, 255, 255, 0.78);
       }
 
-      #onboarding-card button {
+      .overlay-card button {
         justify-self: flex-start;
         padding: 0.75rem 1.4rem;
         border-radius: 0.65rem;
@@ -320,7 +329,7 @@
         transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
 
-      #onboarding-card button:hover {
+      .overlay-card button:hover {
         transform: translateY(-2px);
         box-shadow: 0 14px 28px rgba(31, 111, 235, 0.35);
       }
@@ -408,13 +417,16 @@
           </ul>
         </div>
         <div id="board-feedback" role="status" aria-live="polite"></div>
+        <div id="panel-footer">
+          <button id="guide-btn" type="button" class="secondary-button">Game Guide</button>
+        </div>
       </aside>
       <div id="canvas-wrapper">
         <canvas id="squart-canvas"></canvas>
       </div>
     </div>
-    <div id="onboarding-overlay" class="hidden">
-      <div id="onboarding-card">
+    <div id="onboarding-overlay" class="overlay hidden">
+      <div id="onboarding-card" class="overlay-card">
         <h2>Welcome to Squart</h2>
         <p>
           Squart extends Domineering: players alternate placing dominoes while inactive squares block both sides. Play
@@ -427,6 +439,37 @@
           <li>Shortcuts and tooltips help you stay in flow.</li>
         </ul>
         <button id="onboarding-dismiss">Let&rsquo;s play</button>
+      </div>
+    </div>
+    <div id="guide-overlay" class="overlay hidden">
+      <div id="guide-card" class="overlay-card">
+        <h2>How to Play Squart</h2>
+        <p>
+          Squart is a twist on the game Domineering. Players alternate placing dominoes with different orientations while
+          inactive squares act as permanent obstacles on the board.
+        </p>
+        <ol>
+          <li>
+            <strong>Turns:</strong> The horizontal player (blue) places dominoes along rows; the vertical player (red)
+            places dominoes along columns.
+          </li>
+          <li>
+            <strong>Inactive squares:</strong> These “building” tiles cannot be covered and block both players. Adjust
+            their percentage and layout with the slider or let the game generate them randomly.
+          </li>
+          <li>
+            <strong>Objective:</strong> The game ends when the player on turn cannot place a valid domino. That player
+            loses and the opponent wins automatically.
+          </li>
+          <li>
+            <strong>Controls:</strong> Click an active square to attempt a move. Sliders change board dimensions, and
+            “Regenerate Board” creates a new setup.
+          </li>
+        </ol>
+        <p>
+          Experiment with different board sizes and inactive percentages to discover a balance that suits both players.
+        </p>
+        <button id="guide-dismiss" type="button">Close</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>
