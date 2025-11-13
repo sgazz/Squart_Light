@@ -229,6 +229,8 @@
       #panel-footer {
         margin-top: auto;
         display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
       }
 
       #panel-footer button {
@@ -334,6 +336,307 @@
         box-shadow: 0 14px 28px rgba(31, 111, 235, 0.35);
       }
 
+      .story-card {
+        width: min(90vw, 880px);
+        max-height: 90vh;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 1.5rem;
+      }
+
+      .story-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .story-header h2 {
+        margin-bottom: 0.35rem;
+      }
+
+      .story-subtitle {
+        margin: 0;
+        font-size: 0.95rem;
+        color: rgba(229, 236, 255, 0.8);
+      }
+
+      .story-close {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 0.55rem 1rem;
+      }
+
+      .story-body {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 1.5rem;
+        min-height: 360px;
+      }
+
+      .story-briefing-card,
+      .story-debrief-card {
+        width: min(90vw, 560px);
+        max-height: 90vh;
+        gap: 1.25rem;
+      }
+
+      .story-briefing-card header,
+      .story-debrief-card header {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .story-briefing-card h2,
+      .story-debrief-card h2 {
+        margin: 0;
+      }
+
+      .story-briefing-meta,
+      .story-debrief-meta {
+        margin: 0;
+        font-size: 0.95rem;
+        color: rgba(229, 236, 255, 0.78);
+      }
+
+      .story-briefing-details {
+        margin: 0;
+        padding-left: 1.1rem;
+        display: grid;
+        gap: 0.45rem;
+        color: rgba(229, 236, 255, 0.8);
+        font-size: 0.95rem;
+      }
+
+      .story-briefing-actions,
+      .story-debrief-actions {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .story-briefing-actions .secondary-button,
+      .story-debrief-actions .secondary-button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      #story-city-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+
+      .story-city-button {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 0.65rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      }
+
+      .story-city-button.active,
+      .story-city-button:hover {
+        border-color: rgba(95, 187, 255, 0.35);
+        background: rgba(95, 187, 255, 0.1);
+        transform: translateX(3px);
+      }
+
+      .story-city-button:disabled,
+      .story-city-button:disabled:hover {
+        opacity: 0.45;
+        cursor: not-allowed;
+        transform: none;
+        background: rgba(255, 255, 255, 0.02);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .story-city-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .story-progress {
+        font-size: 0.8rem;
+        color: rgba(229, 236, 255, 0.7);
+      }
+
+      #story-city-detail {
+        display: grid;
+        gap: 1rem;
+        grid-template-rows: auto auto 1fr auto;
+      }
+
+      #story-city-meta h3 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      #story-city-meta p {
+        margin: 0.35rem 0 0;
+        color: rgba(229, 236, 255, 0.78);
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+
+      #story-map {
+        position: relative;
+        border-radius: 0.85rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: radial-gradient(circle at 30% 35%, rgba(95, 187, 255, 0.25), transparent 60%),
+          radial-gradient(circle at 70% 70%, rgba(255, 122, 197, 0.25), transparent 55%),
+          rgba(10, 16, 32, 0.8);
+        min-height: 140px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(229, 236, 255, 0.7);
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        overflow: hidden;
+      }
+
+      .story-map-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      #story-neighborhood-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .neighborhood-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.85rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(8, 14, 26, 0.75);
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .neighborhood-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(31, 111, 235, 0.25);
+      }
+
+      .neighborhood-card.selected {
+        border-color: rgba(95, 187, 255, 0.6);
+        box-shadow: 0 16px 32px rgba(95, 187, 255, 0.3);
+      }
+
+      .neighborhood-card.locked {
+        cursor: not-allowed;
+        opacity: 0.55;
+        box-shadow: none;
+      }
+
+      .neighborhood-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .neighborhood-status {
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .neighborhood-status span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+      }
+
+      .status-locked {
+        color: rgba(255, 99, 132, 0.7);
+      }
+
+      .status-available {
+        color: rgba(95, 187, 255, 0.85);
+      }
+
+      .status-completed {
+        color: rgba(255, 231, 107, 0.95);
+      }
+
+      #story-mission-detail {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 1rem;
+        display: grid;
+        gap: 0.65rem;
+      }
+
+      #story-mission-detail h4 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      #story-mission-detail p {
+        margin: 0;
+        color: rgba(229, 236, 255, 0.78);
+        line-height: 1.5;
+      }
+
+      #story-mission-meta {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+        color: rgba(229, 236, 255, 0.75);
+      }
+
+      #story-start-btn {
+        justify-self: flex-start;
+        padding: 0.75rem 1.6rem;
+      }
+
+      #story-empty-state {
+        margin: 0;
+        font-size: 0.95rem;
+        color: rgba(229, 236, 255, 0.7);
+      }
+
+      @media (max-width: 960px) {
+        .story-body {
+          grid-template-columns: 1fr;
+        }
+
+        #story-city-list {
+          flex-direction: row;
+          overflow-x: auto;
+          padding-bottom: 0.4rem;
+        }
+
+        .story-city-button {
+          min-width: 200px;
+        }
+      }
+
       #canvas-wrapper {
         position: relative;
         width: 100%;
@@ -418,6 +721,7 @@
         </div>
         <div id="board-feedback" role="status" aria-live="polite"></div>
         <div id="panel-footer">
+          <button id="story-btn" type="button">Story Mode</button>
           <button id="guide-btn" type="button" class="secondary-button">Game Guide</button>
         </div>
       </aside>
@@ -470,6 +774,62 @@
           Experiment with different board sizes and inactive percentages to discover a balance that suits both players.
         </p>
         <button id="guide-dismiss" type="button">Close</button>
+      </div>
+    </div>
+    <div id="story-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div id="story-card" class="overlay-card story-card">
+        <div class="story-header">
+          <div>
+            <h2>Story Mode</h2>
+            <p class="story-subtitle">Conquer city quarters to reclaim the skyline.</p>
+          </div>
+          <button id="story-close" type="button" class="story-close">Close</button>
+        </div>
+        <div class="story-body">
+          <nav id="story-city-list" aria-label="Cities"></nav>
+          <section id="story-city-detail" aria-live="polite">
+            <div id="story-city-meta">
+              <h3 id="story-city-name">Select a city</h3>
+              <p id="story-city-description">Choose a city to review its quarters and start a mission.</p>
+            </div>
+            <div id="story-map">City map</div>
+            <div id="story-neighborhood-grid"></div>
+            <div id="story-mission-detail">
+              <p id="story-empty-state">Select an available quarter to review mission details.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <div id="story-briefing-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card story-briefing-card">
+        <header>
+          <h2 id="story-briefing-title">Mission Briefing</h2>
+          <p id="story-briefing-subtitle" class="story-briefing-meta">City · Neighborhood</p>
+        </header>
+        <p id="story-briefing-intro" class="story-briefing-meta">
+          Review the objective before you enter this quarter.
+        </p>
+        <ul id="story-briefing-details" class="story-briefing-details"></ul>
+        <div class="story-briefing-actions">
+          <button id="story-briefing-start" type="button">Begin Mission</button>
+          <button id="story-briefing-cancel" type="button" class="secondary-button">Back</button>
+        </div>
+      </div>
+    </div>
+    <div id="story-debrief-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card story-debrief-card">
+        <header>
+          <h2 id="story-debrief-title">Mission Outcome</h2>
+          <p id="story-debrief-subtitle" class="story-debrief-meta">City · Neighborhood</p>
+        </header>
+        <p id="story-debrief-summary" class="story-debrief-meta">
+          Result summary will appear here.
+        </p>
+        <p id="story-debrief-next" class="story-debrief-meta"></p>
+        <div class="story-debrief-actions">
+          <button id="story-debrief-continue" type="button">Continue</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

@@ -4,6 +4,13 @@ const MIN_INACTIVE_PERCENTAGE = 0.17;
 const MAX_INACTIVE_PERCENTAGE = 0.19;
 const MAX_CUSTOM_PERCENTAGE = 90;
 
+function calculateInactivePercentage(inactiveCount, totalSquares) {
+  if (!totalSquares || totalSquares <= 0) {
+    return 0;
+  }
+  return (inactiveCount / totalSquares) * 100;
+}
+
 export const ORIENTATION = {
   HORIZONTAL: 'horizontal',
   VERTICAL: 'vertical',
@@ -14,35 +21,58 @@ export const GAME_STATUS = {
   FINISHED: 'finished',
 };
 
-export function generateBoard({ rows = 10, cols = 10, seed, inactivePercentage } = {}) {
+export function generateBoard({ rows = 10, cols = 10, seed, inactivePercentage, layoutMask } = {}) {
   validateBoardSize(rows, cols);
 
+  const maskInfo = normalizeLayoutMask(rows, cols, layoutMask);
   const random = createRandom(seed);
-  const totalSquares = rows * cols;
-  const { inactiveCount, actualPercentage, requestedPercentage } = determineInactiveCount(
-    totalSquares,
-    random,
-    inactivePercentage
-  );
-
   const cells = Array.from({ length: rows }, (_, row) => {
     return Array.from({ length: cols }, (_, col) => ({
       row,
       col,
       isInactive: false,
       occupiedBy: null,
+      isVoid: false,
     }));
   });
 
-  const availablePositions = [];
+  const playablePositions = [];
+  const voidSquares = [];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      availablePositions.push({ row, col });
+      const key = makeCoordinateKey(row, col);
+      let isAccessible = true;
+      if (maskInfo) {
+        if (maskInfo.type === 'allowed') {
+          isAccessible = maskInfo.allowed.has(key);
+        } else if (maskInfo.type === 'blocked') {
+          isAccessible = !maskInfo.blocked.has(key);
+        }
+      }
+
+      if (isAccessible) {
+        playablePositions.push({ row, col });
+      } else {
+        const cell = cells[row][col];
+        cell.isVoid = true;
+        voidSquares.push({ row, col });
+      }
     }
   }
 
-  shuffleInPlace(availablePositions, random);
-  const inactiveSquares = availablePositions.slice(0, inactiveCount);
+  if (maskInfo && playablePositions.length === 0) {
+    throw new Error('Layout mask excluded all squares; at least one cell must remain accessible.');
+  }
+
+  const totalPlayableSquares = playablePositions.length;
+  const { inactiveCount, actualPercentage, requestedPercentage } = determineInactiveCount(
+    totalPlayableSquares,
+    random,
+    inactivePercentage
+  );
+
+  const shuffledPlayable = shuffleInPlace([...playablePositions], random);
+  const inactiveSquares = shuffledPlayable.slice(0, inactiveCount);
   inactiveSquares.forEach(({ row, col }) => {
     cells[row][col].isInactive = true;
   });
@@ -55,6 +85,13 @@ export function generateBoard({ rows = 10, cols = 10, seed, inactivePercentage }
     actualInactivePercentage: actualPercentage,
     requestedInactivePercentage: requestedPercentage,
     inactiveSquares,
+    playableSquareCount: totalPlayableSquares,
+    totalSquareCount: rows * cols,
+    voidSquares,
+    layoutMask: maskInfo
+      ? { type: maskInfo.type, allowedCount: maskInfo.allowed?.size ?? null, blockedCount: maskInfo.blocked?.size ?? null }
+      : null,
+    layoutMaskDefinition: maskInfo ? cloneLayoutMaskSource(maskInfo.source) : null,
     cells,
     placements: [],
     currentPlayer: ORIENTATION.HORIZONTAL,
@@ -71,7 +108,7 @@ export function canPlaceDomino(board, positions) {
 
   return positions.every(({ row, col }) => {
     const cell = board.cells?.[row]?.[col];
-    return Boolean(cell) && !cell.isInactive && !cell.occupiedBy;
+    return Boolean(cell) && !cell.isVoid && !cell.isInactive && !cell.occupiedBy;
   });
 }
 
@@ -135,6 +172,18 @@ function resolveDominoPositions(board, start, orientation) {
 }
 
 function determineInactiveCount(totalSquares, random, percentageOverride) {
+  if (totalSquares <= 0) {
+    const requested =
+      percentageOverride !== undefined && percentageOverride !== null
+        ? Math.min(Math.max(Number(percentageOverride) || 0, 0), MAX_CUSTOM_PERCENTAGE)
+        : null;
+    return {
+      inactiveCount: 0,
+      actualPercentage: 0,
+      requestedPercentage: requested,
+    };
+  }
+
   if (percentageOverride !== undefined && percentageOverride !== null) {
     const numericOverride = Number(percentageOverride);
     if (Number.isNaN(numericOverride)) {
@@ -146,7 +195,7 @@ function determineInactiveCount(totalSquares, random, percentageOverride) {
     const inactiveCount = Math.min(totalSquares, Math.max(0, countFromOverride));
     return {
       inactiveCount,
-      actualPercentage: (inactiveCount / totalSquares) * 100,
+      actualPercentage: calculateInactivePercentage(inactiveCount, totalSquares),
       requestedPercentage: clampedOverride,
     };
   }
@@ -158,16 +207,16 @@ function determineInactiveCount(totalSquares, random, percentageOverride) {
     const inactiveCount = Math.floor(random() * (maxWithinRange - minWithinRange + 1)) + minWithinRange;
     return {
       inactiveCount,
-      actualPercentage: (inactiveCount / totalSquares) * 100,
+      actualPercentage: calculateInactivePercentage(inactiveCount, totalSquares),
       requestedPercentage: null,
     };
   }
 
   const fallback = Math.min(totalSquares - 2, Math.ceil(totalSquares * MIN_INACTIVE_PERCENTAGE));
-  const inactiveCount = Math.max(1, fallback);
+  const inactiveCount = Math.min(totalSquares, Math.max(1, fallback));
   return {
     inactiveCount,
-    actualPercentage: (inactiveCount / totalSquares) * 100,
+    actualPercentage: calculateInactivePercentage(inactiveCount, totalSquares),
     requestedPercentage: null,
   };
 }
@@ -319,6 +368,10 @@ function iteratePlacements(board, orientation, visitor) {
 
   for (let row = 0; row < board.rows; row += 1) {
     for (let col = 0; col < board.cols; col += 1) {
+      const cell = board.cells?.[row]?.[col];
+      if (!cell || cell.isVoid) {
+        continue;
+      }
       const positions = resolveDominoPositions(board, { row, col }, orientation);
       if (positions && visitor(positions, row, col)) {
         return true;
@@ -327,4 +380,90 @@ function iteratePlacements(board, orientation, visitor) {
   }
 
   return false;
+}
+
+function normalizeLayoutMask(rows, cols, layoutMask) {
+  if (!layoutMask) {
+    return null;
+  }
+
+  const maskCandidate = Array.isArray(layoutMask) ? { allowed: layoutMask } : layoutMask;
+  if (!maskCandidate || typeof maskCandidate !== 'object') {
+    return null;
+  }
+
+  const allowedEntries = coerceCoordinateEntries(
+    maskCandidate.allowed ?? maskCandidate.allow ?? maskCandidate.include ?? null
+  ).filter(({ row, col }) => isCoordinateWithinMaskBounds(rows, cols, row, col));
+
+  if (allowedEntries.length > 0) {
+    const allowedSet = new Set(allowedEntries.map(({ row, col }) => makeCoordinateKey(row, col)));
+    return {
+      type: 'allowed',
+      allowed: allowedSet,
+      blocked: null,
+      source: maskCandidate,
+    };
+  }
+
+  const blockedEntries = coerceCoordinateEntries(
+    maskCandidate.blocked ?? maskCandidate.exclude ?? null
+  ).filter(({ row, col }) => isCoordinateWithinMaskBounds(rows, cols, row, col));
+
+  if (blockedEntries.length > 0) {
+    const blockedSet = new Set(blockedEntries.map(({ row, col }) => makeCoordinateKey(row, col)));
+    return {
+      type: 'blocked',
+      allowed: null,
+      blocked: blockedSet,
+      source: maskCandidate,
+    };
+  }
+
+  return null;
+}
+
+function coerceCoordinateEntries(value) {
+  if (!value) {
+    return [];
+  }
+
+  const list = Array.isArray(value) ? value : [value];
+  const entries = [];
+  list.forEach((entry) => {
+    if (Array.isArray(entry) && entry.length >= 2) {
+      const [row, col] = entry;
+      if (Number.isInteger(row) && Number.isInteger(col)) {
+        entries.push({ row, col });
+      }
+      return;
+    }
+
+    if (entry && typeof entry === 'object') {
+      const { row, col } = entry;
+      if (Number.isInteger(row) && Number.isInteger(col)) {
+        entries.push({ row, col });
+      }
+    }
+  });
+  return entries;
+}
+
+function isCoordinateWithinMaskBounds(rows, cols, row, col) {
+  return Number.isInteger(row) && Number.isInteger(col) && row >= 0 && row < rows && col >= 0 && col < cols;
+}
+
+function makeCoordinateKey(row, col) {
+  return `${row}:${col}`;
+}
+
+function cloneLayoutMaskSource(source) {
+  if (!source || typeof source !== 'object') {
+    return source ?? null;
+  }
+  try {
+    return JSON.parse(JSON.stringify(source));
+  } catch (error) {
+    return source;
+  }
 }

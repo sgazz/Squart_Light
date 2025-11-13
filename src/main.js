@@ -3,6 +3,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { generateBoard, ORIENTATION, GAME_STATUS, placeDomino, countAvailableMoves } from './game/board.js';
 import { buildBoardGroup, addDominoMesh } from './three/boardRenderer.js';
 import { createWinnerBanner, updateWinnerBanner, disposeWinnerBanner } from './three/winnerBanner.js';
+import {
+  initializeCampaignProgress,
+  getCampaignState,
+  setNeighborhoodStatus,
+  findNeighborhood,
+  NEIGHBORHOOD_STATUS,
+} from './story/campaign.js';
 
 const canvasWrapper = document.getElementById('canvas-wrapper');
 const canvas = document.getElementById('squart-canvas');
@@ -25,6 +32,28 @@ const onboardingOverlay = document.getElementById('onboarding-overlay');
 const onboardingDismiss = document.getElementById('onboarding-dismiss');
 const guideOverlay = document.getElementById('guide-overlay');
 const guideDismiss = document.getElementById('guide-dismiss');
+const storyButton = document.getElementById('story-btn');
+const storyOverlay = document.getElementById('story-overlay');
+const storyCloseButton = document.getElementById('story-close');
+const storyCityList = document.getElementById('story-city-list');
+const storyCityName = document.getElementById('story-city-name');
+const storyCityDescription = document.getElementById('story-city-description');
+const storyNeighborhoodGrid = document.getElementById('story-neighborhood-grid');
+const storyMissionDetail = document.getElementById('story-mission-detail');
+const storyMap = document.getElementById('story-map');
+const storyBriefingOverlay = document.getElementById('story-briefing-overlay');
+const storyBriefingTitle = document.getElementById('story-briefing-title');
+const storyBriefingSubtitle = document.getElementById('story-briefing-subtitle');
+const storyBriefingIntro = document.getElementById('story-briefing-intro');
+const storyBriefingDetails = document.getElementById('story-briefing-details');
+const storyBriefingStart = document.getElementById('story-briefing-start');
+const storyBriefingCancel = document.getElementById('story-briefing-cancel');
+const storyDebriefOverlay = document.getElementById('story-debrief-overlay');
+const storyDebriefTitle = document.getElementById('story-debrief-title');
+const storyDebriefSubtitle = document.getElementById('story-debrief-subtitle');
+const storyDebriefSummary = document.getElementById('story-debrief-summary');
+const storyDebriefNext = document.getElementById('story-debrief-next');
+const storyDebriefContinue = document.getElementById('story-debrief-continue');
 
 const ORIENTATION_LABELS = {
   [ORIENTATION.HORIZONTAL]: 'Horizontal (Blue)',
@@ -36,6 +65,30 @@ const REGENERATE_DEBOUNCE_MS = 250;
 const ONBOARDING_KEY = 'squart:onboarding:v1';
 const FAIRNESS_MAX_ABS_DIFF = 1;
 const FAIRNESS_MAX_ATTEMPTS = 40;
+
+const MAP_PIN_RADIUS = 9;
+const MAP_THEME_GRADIENTS = {
+  'neo-aurora': {
+    inner: '#1a233d',
+    outer: '#070c17',
+    accent: '#4f7dff',
+  },
+  'solstice-haven': {
+    inner: '#2f1f1a',
+    outer: '#140905',
+    accent: '#ffb84d',
+  },
+  'astral-frontier': {
+    inner: '#1a2b2f',
+    outer: '#050b0d',
+    accent: '#63ffd5',
+  },
+  default: {
+    inner: '#222',
+    outer: '#0b0b0b',
+    accent: '#9fa9d1',
+  },
+};
 
 const scene = new THREE.Scene();
 scene.background = createBackgroundTexture();
@@ -80,9 +133,16 @@ let feedbackTimeoutId = null;
 const dominoAnimations = [];
 const inactiveAnimations = [];
 let lastFairnessInfo = null;
+let storyState = null;
+let selectedStoryCityId = null;
+let selectedStoryNeighborhoodId = null;
+let storyMissionConfig = null;
+let pendingStoryMission = null;
+let storyDebriefVisible = false;
 
 function init() {
   initDimensionSliders();
+  initStoryMode();
   regenerateBoard();
   window.addEventListener('resize', handleResize);
   renderer.domElement.addEventListener('pointerdown', handlePointerDown);
@@ -105,6 +165,36 @@ function init() {
       }
     });
   }
+  if (storyOverlay) {
+    storyOverlay.addEventListener('click', (event) => {
+      if (event.target === storyOverlay) {
+        hideStoryOverlay();
+      }
+    });
+  }
+  if (storyBriefingOverlay) {
+    storyBriefingOverlay.addEventListener('click', (event) => {
+      if (event.target === storyBriefingOverlay) {
+        cancelStoryBriefing(true);
+      }
+    });
+  }
+  if (storyDebriefOverlay) {
+    storyDebriefOverlay.addEventListener('click', (event) => {
+      if (event.target === storyDebriefOverlay) {
+        hideStoryDebrief(true);
+      }
+    });
+  }
+  if (storyBriefingStart) {
+    storyBriefingStart.addEventListener('click', launchStoryMission);
+  }
+  if (storyBriefingCancel) {
+    storyBriefingCancel.addEventListener('click', () => cancelStoryBriefing(true));
+  }
+  if (storyDebriefContinue) {
+    storyDebriefContinue.addEventListener('click', () => hideStoryDebrief(true));
+  }
   if (onboardingDismiss) {
     onboardingDismiss.addEventListener('click', () => hideOnboarding(true));
   }
@@ -119,6 +209,18 @@ function init() {
   updatePercentageDisplay();
   handleResize();
   animate();
+}
+
+function initStoryMode() {
+  storyState = initializeCampaignProgress();
+  if (storyButton) {
+    storyButton.addEventListener('click', showStoryOverlay);
+  }
+  if (storyCloseButton) {
+    storyCloseButton.addEventListener('click', hideStoryOverlay);
+  }
+  refreshStoryState();
+  renderStoryMode();
 }
 
 function initDimensionSliders() {
@@ -147,9 +249,15 @@ function regenerateBoard() {
     cols,
     seed,
     inactivePercentage: customInactivePercentage ?? undefined,
+    layoutMask: storyMissionConfig?.mask ?? null,
   });
 
   boardData = board;
+  if (storyMissionConfig) {
+    boardData.storyMission = { ...storyMissionConfig };
+  } else if (boardData.storyMission) {
+    delete boardData.storyMission;
+  }
   lastFairnessInfo = {
     horizontalMoves: stats.horizontalMoves,
     verticalMoves: stats.verticalMoves,
@@ -163,6 +271,9 @@ function regenerateBoard() {
   updateStats();
   updateRemainingMoves();
   syncWinnerBanner();
+  if (boardData.status === GAME_STATUS.FINISHED) {
+    handleStoryMissionComplete(boardData);
+  }
   updateCamera(rows, cols);
 
   if (lastFairnessInfo.seedProvided) {
@@ -211,11 +322,19 @@ function updateStats() {
     return;
   }
 
-  const inactivePercentage = boardData.actualInactivePercentage;
+  const inactivePercentage =
+    typeof boardData.actualInactivePercentage === 'number' ? boardData.actualInactivePercentage : 0;
   const placementCount = boardData.placements.length;
+  const totalSquares = boardData.totalSquareCount ?? boardData.cols * boardData.rows;
+  const playableSquares = boardData.playableSquareCount ?? totalSquares;
+  const excludedSquares = Math.max(0, totalSquares - playableSquares);
   const baseInfo = `Inactive squares: <strong>${boardData.inactiveCount}</strong> (${inactivePercentage.toFixed(
     1
   )}%)<br />Board size: ${boardData.cols} × ${boardData.rows}<br />Dominoes placed: ${placementCount}`;
+  const maskInfo =
+    excludedSquares > 0
+      ? `<br />Playable squares: <strong>${playableSquares}</strong> (mask excluded ${excludedSquares})`
+      : '';
 
   const modeInfo =
     boardData.requestedInactivePercentage === null
@@ -235,7 +354,7 @@ function updateStats() {
       }${lastFairnessInfo.seedProvided ? ', seed' : ''})`
     : '';
 
-  statsElement.innerHTML = `${baseInfo}<br />${modeInfo}<br />${statusInfo}${
+  statsElement.innerHTML = `${baseInfo}${maskInfo}<br />${modeInfo}<br />${statusInfo}${
     fairnessInfo ? `<br />${fairnessInfo}` : ''
   }`;
 }
@@ -260,6 +379,7 @@ function handleResize() {
 
 function handlePercentageChange(event) {
   customInactivePercentage = Number(event.target.value);
+  clearStoryMissionContext();
   updatePercentageDisplay();
   scheduleRegenerateBoard();
 }
@@ -267,6 +387,7 @@ function handlePercentageChange(event) {
 function handleDefaultPercentage() {
   customInactivePercentage = null;
   percentageSlider.value = '17';
+  clearStoryMissionContext();
   updatePercentageDisplay();
   scheduleRegenerateBoard(true);
 }
@@ -280,13 +401,14 @@ function updatePercentageDisplay() {
 }
 
 function handleDimensionChange() {
+  clearStoryMissionContext();
   updateDimensionDisplay();
   scheduleRegenerateBoard();
 }
 
-function generateBalancedBoard({ rows, cols, seed, inactivePercentage }) {
+function generateBalancedBoard({ rows, cols, seed, inactivePercentage, layoutMask }) {
   if (seed !== undefined) {
-    const board = generateBoard({ rows, cols, seed, inactivePercentage });
+    const board = generateBoard({ rows, cols, seed, inactivePercentage, layoutMask });
     const stats = measureMoveBalance(board);
     return { board, stats, attempts: 1 };
   }
@@ -296,7 +418,7 @@ function generateBalancedBoard({ rows, cols, seed, inactivePercentage }) {
   let bestDiff = Infinity;
 
   for (let attempt = 1; attempt <= FAIRNESS_MAX_ATTEMPTS; attempt += 1) {
-    const board = generateBoard({ rows, cols, inactivePercentage });
+    const board = generateBoard({ rows, cols, inactivePercentage, layoutMask });
     const stats = measureMoveBalance(board);
     if (stats.diff < bestDiff) {
       bestBoard = board;
@@ -459,6 +581,9 @@ function tryPlaceDomino(row, col) {
   updateStats();
   updateRemainingMoves();
   syncWinnerBanner();
+  if (boardData.status === GAME_STATUS.FINISHED) {
+    handleStoryMissionComplete(boardData);
+  }
   showFeedback('Domino placed!', 'success', 1000);
 }
 
@@ -604,12 +729,18 @@ function handleShortcutKeys(event) {
     case 'v':
       showFeedback('Vertical player places vertical dominoes automatically.', 'info', 1500);
       break;
+    case 's':
+      showStoryOverlay();
+      break;
     case 'g':
       showGuideOverlay();
       break;
     case 'escape':
       hideOnboarding(false);
       hideGuideOverlay();
+      cancelStoryBriefing(false);
+      hideStoryDebrief(false);
+      hideStoryOverlay();
       break;
     default:
       break;
@@ -654,6 +785,612 @@ function hideGuideOverlay() {
     return;
   }
   guideOverlay.classList.add('hidden');
+}
+
+function showStoryOverlay() {
+  if (!storyOverlay) {
+    return;
+  }
+  refreshStoryState();
+  renderStoryMode();
+  storyOverlay.classList.remove('hidden');
+}
+
+function hideStoryOverlay() {
+  if (!storyOverlay) {
+    return;
+  }
+  storyOverlay.classList.add('hidden');
+}
+
+function refreshStoryState() {
+  storyState = getCampaignState();
+  if (!storyState.cities || storyState.cities.length === 0) {
+    selectedStoryCityId = null;
+    selectedStoryNeighborhoodId = null;
+    return;
+  }
+  const hasSelectedCity = storyState.cities.some(
+    (city) => city.id === selectedStoryCityId && city.unlocked
+  );
+  if (!hasSelectedCity) {
+    const fallbackCity = storyState.cities.find((city) => city.unlocked) ?? storyState.cities[0];
+    selectedStoryCityId = fallbackCity ? fallbackCity.id : null;
+    selectedStoryNeighborhoodId = null;
+  }
+}
+
+function renderStoryMode() {
+  renderStoryCityList();
+  renderStoryCityDetail();
+}
+
+function renderStoryCityList() {
+  if (!storyCityList || !storyState) {
+    return;
+  }
+  storyCityList.innerHTML = '';
+
+  if (!storyState.cities || storyState.cities.length === 0) {
+    const emptyMessage = document.createElement('p');
+    emptyMessage.id = 'story-city-empty';
+    emptyMessage.textContent = 'No cities defined yet.';
+    storyCityList.appendChild(emptyMessage);
+    return;
+  }
+
+  storyState.cities.forEach((city) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'story-city-button';
+    if (city.id === selectedStoryCityId) {
+      button.classList.add('active');
+    }
+
+    const title = document.createElement('span');
+    title.className = 'story-city-title';
+    title.textContent = city.name;
+    button.appendChild(title);
+
+    const progress = document.createElement('span');
+    progress.className = 'story-progress';
+    if (!city.unlocked) {
+      progress.textContent = 'Locked — complete previous city';
+      button.disabled = true;
+    } else {
+      progress.textContent = `${city.completedCount}/${city.totalCount} completed`;
+      button.addEventListener('click', () => selectStoryCity(city.id));
+    }
+    button.appendChild(progress);
+
+    storyCityList.appendChild(button);
+  });
+}
+
+function selectStoryCity(cityId) {
+  if (selectedStoryCityId === cityId) {
+    return;
+  }
+  selectedStoryCityId = cityId;
+  selectedStoryNeighborhoodId = null;
+  renderStoryMode();
+}
+
+function renderStoryCityDetail() {
+  if (!storyState) {
+    return;
+  }
+  const city = storyState.cities?.find((item) => item.id === selectedStoryCityId) ?? null;
+
+  if (!storyCityName || !storyCityDescription || !storyNeighborhoodGrid) {
+    return;
+  }
+
+  if (!city) {
+    storyCityName.textContent = 'Select a city';
+    storyCityDescription.textContent = 'Choose a city to review its quarters and start a mission.';
+    if (storyMap) {
+      storyMap.textContent = 'City map';
+    }
+    storyNeighborhoodGrid.innerHTML = '';
+    renderStoryMissionDetail(null, null);
+    return;
+  }
+
+  storyCityName.textContent = city.name;
+  storyCityDescription.textContent = city.description;
+  if (storyMap) {
+    renderStoryMap(city, selectedStoryNeighborhoodId);
+  }
+
+  storyNeighborhoodGrid.innerHTML = '';
+
+  if (
+    !selectedStoryNeighborhoodId ||
+    !city.neighborhoods.some((hood) => hood.id === selectedStoryNeighborhoodId)
+  ) {
+    const firstAccessible = city.neighborhoods.find(
+      (hood) => hood.status !== NEIGHBORHOOD_STATUS.LOCKED
+    );
+    selectedStoryNeighborhoodId = firstAccessible ? firstAccessible.id : null;
+  }
+
+  city.neighborhoods.forEach((hood) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'neighborhood-card';
+    if (hood.id === selectedStoryNeighborhoodId) {
+      card.classList.add('selected');
+    }
+    if (hood.status === NEIGHBORHOOD_STATUS.LOCKED) {
+      card.classList.add('locked');
+      card.disabled = true;
+    } else {
+      card.addEventListener('click', () => selectStoryNeighborhood(city.id, hood.id));
+    }
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'neighborhood-name';
+    nameEl.textContent = hood.name;
+    card.appendChild(nameEl);
+
+    const statusEl = document.createElement('span');
+    statusEl.className = `neighborhood-status ${getNeighborhoodStatusClass(hood.status)}`;
+    statusEl.textContent = getNeighborhoodStatusLabel(hood.status);
+    card.appendChild(statusEl);
+
+    storyNeighborhoodGrid.appendChild(card);
+  });
+
+  const selectedNeighborhood =
+    city.neighborhoods.find((hood) => hood.id === selectedStoryNeighborhoodId) ?? null;
+  renderStoryMissionDetail(city, selectedNeighborhood);
+}
+
+function selectStoryNeighborhood(cityId, neighborhoodId) {
+  if (selectedStoryNeighborhoodId === neighborhoodId) {
+    return;
+  }
+  selectedStoryCityId = cityId;
+  selectedStoryNeighborhoodId = neighborhoodId;
+  renderStoryMode();
+}
+
+function renderStoryMissionDetail(city, neighborhood) {
+  if (!storyMissionDetail) {
+    return;
+  }
+  storyMissionDetail.innerHTML = '';
+
+  if (!city || !neighborhood) {
+    const empty = document.createElement('p');
+    empty.id = 'story-empty-state';
+    empty.textContent = 'Select an available quarter to review mission details.';
+    storyMissionDetail.appendChild(empty);
+    return;
+  }
+
+  const title = document.createElement('h4');
+  title.textContent = neighborhood.name;
+  storyMissionDetail.appendChild(title);
+
+  const intro = document.createElement('p');
+  intro.textContent = neighborhood.intro ?? 'Prepare to secure this quarter.';
+  storyMissionDetail.appendChild(intro);
+
+  const metaList = document.createElement('ul');
+  metaList.id = 'story-mission-meta';
+
+  const sizeItem = document.createElement('li');
+  sizeItem.textContent = `Board size: ${neighborhood.cols} × ${neighborhood.rows}`;
+  metaList.appendChild(sizeItem);
+
+  if (typeof neighborhood.inactivePercentage === 'number') {
+    const inactiveItem = document.createElement('li');
+    inactiveItem.textContent = `Inactive target: ${neighborhood.inactivePercentage}%`;
+    metaList.appendChild(inactiveItem);
+  }
+
+  if (neighborhood.recommendedSeed) {
+    const seedItem = document.createElement('li');
+    seedItem.textContent = `Recommended seed: ${neighborhood.recommendedSeed}`;
+    metaList.appendChild(seedItem);
+  }
+
+  if (neighborhood.mask) {
+    const maskItem = document.createElement('li');
+    maskItem.textContent = 'Custom layout mask enabled';
+    metaList.appendChild(maskItem);
+  }
+
+  storyMissionDetail.appendChild(metaList);
+
+  const actionButton = document.createElement('button');
+  actionButton.id = 'story-start-btn';
+  actionButton.type = 'button';
+  actionButton.textContent =
+    neighborhood.status === NEIGHBORHOOD_STATUS.COMPLETED ? 'Replay Mission' : 'Start Mission';
+  actionButton.addEventListener('click', () => startStoryMission(city, neighborhood));
+  storyMissionDetail.appendChild(actionButton);
+}
+
+function renderStoryMap(city, focusedNeighborhoodId) {
+  if (!storyMap) {
+    return;
+  }
+
+  const { mapMeta, neighborhoods } = city;
+  if (!mapMeta || !mapMeta.size) {
+    storyMap.textContent = `${city.name} map`;
+    return;
+  }
+
+  const { width, height } = mapMeta.size;
+  const canvasId = 'story-map-canvas';
+  let canvas = storyMap.querySelector(`#${canvasId}`);
+  if (!canvas) {
+    storyMap.innerHTML = '';
+    canvas = document.createElement('canvas');
+    canvas.id = canvasId;
+    canvas.className = 'story-map-canvas';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    storyMap.appendChild(canvas);
+  }
+
+  const deviceRatio = window.devicePixelRatio || 1;
+  canvas.width = width * deviceRatio;
+  canvas.height = height * deviceRatio;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(deviceRatio, deviceRatio);
+  ctx.clearRect(0, 0, width, height);
+
+  drawMapBackground(ctx, width, height, mapMeta.theme ?? 'default');
+  drawMapContours(ctx, width, height, mapMeta.theme ?? 'default');
+  drawNeighborhoodPins(ctx, neighborhoods, focusedNeighborhoodId);
+
+  canvas.onclick = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    const y = ((event.clientY - rect.top) / rect.height) * height;
+    const hit = hitTestNeighborhoodPin(neighborhoods, x, y);
+    if (hit && hit.status !== NEIGHBORHOOD_STATUS.LOCKED) {
+      selectStoryNeighborhood(city.id, hit.id);
+    }
+  };
+}
+
+function drawMapBackground(ctx, width, height, themeKey) {
+  const theme = MAP_THEME_GRADIENTS[themeKey] ?? MAP_THEME_GRADIENTS.default;
+  const gradient = ctx.createRadialGradient(width * 0.5, height * 0.45, Math.min(width, height) * 0.15, width * 0.5, height * 0.55, Math.max(width, height) * 0.6);
+  gradient.addColorStop(0, theme.inner);
+  gradient.addColorStop(1, theme.outer);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.15;
+  ctx.strokeRect(4, 4, width - 8, height - 8);
+  ctx.globalAlpha = 1;
+}
+
+function drawMapContours(ctx, width, height, themeKey) {
+  const theme = MAP_THEME_GRADIENTS[themeKey] ?? MAP_THEME_GRADIENTS.default;
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.25;
+
+  const contourCount = 3;
+  for (let i = 0; i < contourCount; i += 1) {
+    const inset = 18 + i * 12;
+    drawRoundedRect(ctx, inset, inset, width - inset * 2, height - inset * 2, 18);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function drawRoundedRect(ctx, x, y, rectWidth, rectHeight, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + rectWidth - radius, y);
+  ctx.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + radius);
+  ctx.lineTo(x + rectWidth, y + rectHeight - radius);
+  ctx.quadraticCurveTo(x + rectWidth, y + rectHeight, x + rectWidth - radius, y + rectHeight);
+  ctx.lineTo(x + radius, y + rectHeight);
+  ctx.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawNeighborhoodPins(ctx, neighborhoods, focusedNeighborhoodId) {
+  neighborhoods.forEach((hood) => {
+    const { mapPosition } = hood;
+    if (!mapPosition) {
+      return;
+    }
+    const { fill, stroke, pulse } = getPinColors(hood, focusedNeighborhoodId);
+
+    if (pulse) {
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(mapPosition.x, mapPosition.y, MAP_PIN_RADIUS * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(mapPosition.x, mapPosition.y, MAP_PIN_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stroke;
+    ctx.beginPath();
+    ctx.arc(mapPosition.x, mapPosition.y, MAP_PIN_RADIUS - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+}
+
+function getPinColors(neighborhood, focusedNeighborhoodId) {
+  if (neighborhood.status === NEIGHBORHOOD_STATUS.COMPLETED) {
+    return { fill: '#ffd76a', stroke: '#ffe8a6', pulse: false };
+  }
+  if (neighborhood.status === NEIGHBORHOOD_STATUS.AVAILABLE) {
+    const isFocused = neighborhood.id === focusedNeighborhoodId;
+    return {
+      fill: isFocused ? '#63ffd5' : '#1dd4a7',
+      stroke: '#e8fff6',
+      pulse: true,
+    };
+  }
+  return { fill: '#4f5466', stroke: '#2b2f3f', pulse: false };
+}
+
+function hitTestNeighborhoodPin(neighborhoods, x, y) {
+  for (let i = 0; i < neighborhoods.length; i += 1) {
+    const hood = neighborhoods[i];
+    if (!hood.mapPosition) {
+      continue;
+    }
+    const dx = x - hood.mapPosition.x;
+    const dy = y - hood.mapPosition.y;
+    if (dx * dx + dy * dy <= MAP_PIN_RADIUS * MAP_PIN_RADIUS) {
+      return hood;
+    }
+  }
+  return null;
+}
+
+function startStoryMission(city, neighborhood) {
+  if (!city || !neighborhood) {
+    return;
+  }
+
+  pendingStoryMission = { city, neighborhood };
+  hideStoryOverlay();
+  showStoryBriefing();
+}
+
+function launchStoryMission() {
+  if (!pendingStoryMission) {
+    return;
+  }
+
+  const { city, neighborhood } = pendingStoryMission;
+
+  rowSlider.value = String(neighborhood.rows);
+  colSlider.value = String(neighborhood.cols);
+  updateDimensionDisplay();
+
+  if (typeof neighborhood.inactivePercentage === 'number') {
+    customInactivePercentage = neighborhood.inactivePercentage;
+    percentageSlider.value = String(neighborhood.inactivePercentage);
+  } else {
+    customInactivePercentage = null;
+    percentageSlider.value = '17';
+  }
+  updatePercentageDisplay();
+
+  if (neighborhood.recommendedSeed) {
+    seedInput.value = neighborhood.recommendedSeed;
+  } else {
+    seedInput.value = '';
+  }
+
+  storyMissionConfig = {
+    cityId: city.id,
+    cityName: city.name,
+    neighborhoodId: neighborhood.id,
+    neighborhoodName: neighborhood.name,
+    mask: neighborhood.mask ?? null,
+  };
+
+  hideStoryBriefing(false);
+  pendingStoryMission = null;
+  storyDebriefVisible = false;
+  showFeedback(`Mission "${neighborhood.name}" loaded.`, 'info', 1600);
+  scheduleRegenerateBoard(true);
+}
+
+function cancelStoryBriefing(reopenStoryPanel = false) {
+  pendingStoryMission = null;
+  hideStoryBriefing(reopenStoryPanel);
+}
+
+function clearStoryMissionContext() {
+  storyMissionConfig = null;
+  pendingStoryMission = null;
+  storyDebriefVisible = false;
+  hideStoryBriefing(false);
+  hideStoryDebrief(false);
+}
+
+function showStoryBriefing() {
+  if (!storyBriefingOverlay || !pendingStoryMission) {
+    return;
+  }
+
+  const { city, neighborhood } = pendingStoryMission;
+  if (storyBriefingTitle) {
+    storyBriefingTitle.textContent = 'Mission Briefing';
+  }
+  if (storyBriefingSubtitle) {
+    storyBriefingSubtitle.textContent = `${city.name} · ${neighborhood.name}`;
+  }
+  if (storyBriefingIntro) {
+    storyBriefingIntro.textContent = neighborhood.intro ?? 'Prepare to secure this quarter of the city.';
+  }
+  if (storyBriefingDetails) {
+    storyBriefingDetails.innerHTML = '';
+    const details = [
+      `Board size: ${neighborhood.cols} × ${neighborhood.rows}`,
+    ];
+    if (typeof neighborhood.inactivePercentage === 'number') {
+      details.push(`Inactive target: ${neighborhood.inactivePercentage}%`);
+    }
+    if (neighborhood.recommendedSeed) {
+      details.push(`Recommended seed: ${neighborhood.recommendedSeed}`);
+    }
+    if (neighborhood.mask) {
+      details.push('Custom layout mask: enabled');
+    }
+    details.forEach((text) => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      storyBriefingDetails.appendChild(item);
+    });
+  }
+
+  storyBriefingOverlay.classList.remove('hidden');
+}
+
+function hideStoryBriefing(reopenStoryPanel = false) {
+  if (!storyBriefingOverlay) {
+    return;
+  }
+  storyBriefingOverlay.classList.add('hidden');
+  if (reopenStoryPanel) {
+    showStoryOverlay();
+  }
+}
+
+function showStoryDebrief({ board, city, neighborhood }) {
+  if (!storyDebriefOverlay || storyDebriefVisible) {
+    return;
+  }
+
+  storyDebriefVisible = true;
+
+  const winnerLabel = board.winner ? ORIENTATION_LABELS[board.winner] : null;
+  const outcomeTitle = board.winner
+    ? `${winnerLabel} prevailed`
+    : 'Stalemate reported';
+  if (storyDebriefTitle) {
+    storyDebriefTitle.textContent = outcomeTitle;
+  }
+
+  if (storyDebriefSubtitle) {
+    const cityName = city?.name ?? board.storyMission?.cityName ?? 'Unknown City';
+    const neighborhoodName =
+      neighborhood?.name ?? board.storyMission?.neighborhoodName ?? 'Quarter';
+    storyDebriefSubtitle.textContent = `${cityName} · ${neighborhoodName}`;
+  }
+
+  if (storyDebriefSummary) {
+    const neighborhoodName =
+      neighborhood?.name ?? board.storyMission?.neighborhoodName ?? 'the quarter';
+    if (board.winner) {
+      storyDebriefSummary.textContent = `${winnerLabel} secured ${neighborhoodName}.`;
+    } else {
+      storyDebriefSummary.textContent = `The battle for ${neighborhoodName} ended in a draw.`;
+    }
+  }
+
+  if (storyDebriefNext) {
+    let nextMessage = '';
+    if (!board.winner) {
+      nextMessage = 'Replay the mission to claim this quarter for the city.';
+    } else if (city) {
+      const nextNeighborhood = city.neighborhoods.find(
+        (hood) => hood.status === NEIGHBORHOOD_STATUS.AVAILABLE
+      );
+      if (nextNeighborhood) {
+        nextMessage = `Next target unlocked: ${nextNeighborhood.name} is now available.`;
+      } else {
+        const alternateCity = storyState?.cities?.find(
+          (candidate) =>
+            candidate.id !== city.id &&
+            candidate.unlocked &&
+            candidate.availableCount > 0
+        );
+        if (alternateCity) {
+          nextMessage = `${alternateCity.name} now has quarters ready for deployment.`;
+        } else {
+          nextMessage = 'All currently unlocked quarters are secured. Await further directives.';
+        }
+      }
+    } else {
+      nextMessage = 'Review city intel to choose your next objective.';
+    }
+    storyDebriefNext.textContent = nextMessage;
+  }
+
+  storyDebriefOverlay.classList.remove('hidden');
+}
+
+function hideStoryDebrief(reopenStoryPanel = false) {
+  if (!storyDebriefOverlay) {
+    return;
+  }
+  storyDebriefOverlay.classList.add('hidden');
+  storyDebriefVisible = false;
+  if (reopenStoryPanel) {
+    showStoryOverlay();
+  }
+}
+
+function handleStoryMissionComplete(board) {
+  if (!board?.storyMission || storyDebriefVisible) {
+    return;
+  }
+
+  const { cityId, neighborhoodId } = board.storyMission;
+  if (board.winner) {
+    setNeighborhoodStatus(cityId, neighborhoodId, NEIGHBORHOOD_STATUS.COMPLETED);
+  }
+  refreshStoryState();
+  const located = findNeighborhood(cityId, neighborhoodId);
+  const city = located?.city ?? null;
+  const neighborhood = located?.neighborhood ?? null;
+  showStoryDebrief({ board, city, neighborhood });
+}
+
+function getNeighborhoodStatusClass(status) {
+  switch (status) {
+    case NEIGHBORHOOD_STATUS.AVAILABLE:
+      return 'status-available';
+    case NEIGHBORHOOD_STATUS.COMPLETED:
+      return 'status-completed';
+    default:
+      return 'status-locked';
+  }
+}
+
+function getNeighborhoodStatusLabel(status) {
+  switch (status) {
+    case NEIGHBORHOOD_STATUS.AVAILABLE:
+      return 'Available';
+    case NEIGHBORHOOD_STATUS.COMPLETED:
+      return 'Completed';
+    default:
+      return 'Locked';
+  }
 }
 
 function createBackgroundTexture() {
