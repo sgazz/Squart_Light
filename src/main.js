@@ -9,6 +9,8 @@ import {
   setNeighborhoodStatus,
   findNeighborhood,
   NEIGHBORHOOD_STATUS,
+  EXTRA_CITY_ID,
+  EXTRA_MISSION,
 } from './story/campaign.js';
 
 const canvasWrapper = document.getElementById('canvas-wrapper');
@@ -38,6 +40,7 @@ const storyCloseButton = document.getElementById('story-close');
 const storyCityList = document.getElementById('story-city-list');
 const storyCityName = document.getElementById('story-city-name');
 const storyCityDescription = document.getElementById('story-city-description');
+const storyCityMeta = document.getElementById('story-city-meta');
 const storyNeighborhoodGrid = document.getElementById('story-neighborhood-grid');
 const storyMissionDetail = document.getElementById('story-mission-detail');
 const storyMap = document.getElementById('story-map');
@@ -83,11 +86,26 @@ const MAP_THEME_GRADIENTS = {
     outer: '#050b0d',
     accent: '#63ffd5',
   },
+  'final-showdown': {
+    inner: '#341a2f',
+    outer: '#0c030f',
+    accent: '#ff6f6b',
+  },
   default: {
     inner: '#222',
     outer: '#0b0b0b',
     accent: '#9fa9d1',
   },
+};
+const ORIENTATION_COLORS = {
+  horizontal: '#4f7dff',
+  vertical: '#ff6f6b',
+  tie: '#ffd76a',
+};
+const ORIENTATION_STROKES = {
+  horizontal: '#dce9ff',
+  vertical: '#ffd6d4',
+  tie: '#ffe8a6',
 };
 
 const scene = new THREE.Scene();
@@ -805,19 +823,53 @@ function hideStoryOverlay() {
 
 function refreshStoryState() {
   storyState = getCampaignState();
-  if (!storyState.cities || storyState.cities.length === 0) {
+  const cities = storyState?.cities ?? [];
+  const extra = storyState?.extraMission ?? null;
+  const hasCities = cities.length > 0;
+  const extraUnlocked = Boolean(extra?.unlocked);
+
+  if (!hasCities && !extraUnlocked) {
     selectedStoryCityId = null;
     selectedStoryNeighborhoodId = null;
     return;
   }
-  const hasSelectedCity = storyState.cities.some(
+
+  const citySelectedAndUnlocked = cities.some(
     (city) => city.id === selectedStoryCityId && city.unlocked
   );
-  if (!hasSelectedCity) {
-    const fallbackCity = storyState.cities.find((city) => city.unlocked) ?? storyState.cities[0];
-    selectedStoryCityId = fallbackCity ? fallbackCity.id : null;
+  const extraSelected = selectedStoryCityId === EXTRA_CITY_ID;
+  const extraAvailable = extraUnlocked && extra.status !== NEIGHBORHOOD_STATUS.LOCKED;
+
+  if (extraSelected) {
+    if (extraAvailable) {
+      if (!selectedStoryNeighborhoodId) {
+        selectedStoryNeighborhoodId = EXTRA_MISSION.id;
+      }
+      return;
+    }
+    selectedStoryCityId = null;
     selectedStoryNeighborhoodId = null;
   }
+
+  if (citySelectedAndUnlocked) {
+    return;
+  }
+
+  const fallbackCity = cities.find((city) => city.unlocked) ?? cities[0] ?? null;
+  if (fallbackCity) {
+    selectedStoryCityId = fallbackCity.id;
+    selectedStoryNeighborhoodId = null;
+    return;
+  }
+
+  if (extraAvailable) {
+    selectedStoryCityId = EXTRA_CITY_ID;
+    selectedStoryNeighborhoodId = EXTRA_MISSION.id;
+    return;
+  }
+
+  selectedStoryCityId = null;
+  selectedStoryNeighborhoodId = null;
 }
 
 function renderStoryMode() {
@@ -858,13 +910,51 @@ function renderStoryCityList() {
       progress.textContent = 'Locked — complete previous city';
       button.disabled = true;
     } else {
-      progress.textContent = `${city.completedCount}/${city.totalCount} completed`;
+      if (city.completed && city.cityWinner) {
+        progress.textContent = `Completed — Winner: ${getCityWinnerLabel(city.cityWinner)}`;
+      } else {
+        progress.textContent = `${city.completedCount}/${city.totalCount} completed`;
+      }
       button.addEventListener('click', () => selectStoryCity(city.id));
     }
     button.appendChild(progress);
 
     storyCityList.appendChild(button);
   });
+
+  const extra = storyState.extraMission;
+  if (extra?.unlocked) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'story-city-button bonus-city-button';
+    if (selectedStoryCityId === EXTRA_CITY_ID) {
+      button.classList.add('active');
+    }
+
+    const title = document.createElement('span');
+    title.className = 'story-city-title';
+    title.textContent = 'Extra Mission';
+    button.appendChild(title);
+
+    const progress = document.createElement('span');
+    progress.className = 'story-progress';
+    if (extra.status === NEIGHBORHOOD_STATUS.COMPLETED && extra.winner) {
+      progress.textContent = `Completed — Winner: ${getCityWinnerLabel(extra.winner)}`;
+    } else if (extra.status === NEIGHBORHOOD_STATUS.COMPLETED) {
+      progress.textContent = 'Completed';
+    } else {
+      progress.textContent = 'Tie-breaker available';
+    }
+    button.appendChild(progress);
+
+    if (extra.status !== NEIGHBORHOOD_STATUS.LOCKED) {
+      button.addEventListener('click', () => selectStoryCity(EXTRA_CITY_ID));
+    } else {
+      button.disabled = true;
+    }
+
+    storyCityList.appendChild(button);
+  }
 }
 
 function selectStoryCity(cityId) {
@@ -872,7 +962,7 @@ function selectStoryCity(cityId) {
     return;
   }
   selectedStoryCityId = cityId;
-  selectedStoryNeighborhoodId = null;
+  selectedStoryNeighborhoodId = cityId === EXTRA_CITY_ID ? EXTRA_MISSION.id : null;
   renderStoryMode();
 }
 
@@ -880,7 +970,10 @@ function renderStoryCityDetail() {
   if (!storyState) {
     return;
   }
-  const city = storyState.cities?.find((item) => item.id === selectedStoryCityId) ?? null;
+  const isExtraCity = selectedStoryCityId === EXTRA_CITY_ID;
+  const city = isExtraCity
+    ? getExtraMissionCity(storyState.extraMission)
+    : storyState.cities?.find((item) => item.id === selectedStoryCityId) ?? null;
 
   if (!storyCityName || !storyCityDescription || !storyNeighborhoodGrid) {
     return;
@@ -892,6 +985,13 @@ function renderStoryCityDetail() {
     if (storyMap) {
       storyMap.textContent = 'City map';
     }
+    if (storyCityMeta) {
+      const cityStatus = document.getElementById('story-city-status');
+      if (cityStatus) {
+        cityStatus.textContent = '';
+        cityStatus.classList.add('hidden');
+      }
+    }
     storyNeighborhoodGrid.innerHTML = '';
     renderStoryMissionDetail(null, null);
     return;
@@ -899,6 +999,27 @@ function renderStoryCityDetail() {
 
   storyCityName.textContent = city.name;
   storyCityDescription.textContent = city.description;
+  if (storyCityMeta) {
+    let cityStatus = document.getElementById('story-city-status');
+    if (!cityStatus) {
+      cityStatus = document.createElement('p');
+      cityStatus.id = 'story-city-status';
+      cityStatus.className = 'story-subtitle';
+      storyCityMeta.appendChild(cityStatus);
+    }
+    if (city.completed && city.cityWinner) {
+      const winnerLabel = getCityWinnerLabel(city.cityWinner);
+      const statusText =
+        city.cityWinner === 'tie'
+          ? `City outcome: Draw`
+          : `City winner: ${winnerLabel}`;
+      cityStatus.textContent = statusText;
+      cityStatus.classList.remove('hidden');
+    } else if (cityStatus) {
+      cityStatus.textContent = '';
+      cityStatus.classList.add('hidden');
+    }
+  }
   if (storyMap) {
     renderStoryMap(city, selectedStoryNeighborhoodId);
   }
@@ -1139,7 +1260,10 @@ function drawNeighborhoodPins(ctx, neighborhoods, focusedNeighborhoodId) {
 
 function getPinColors(neighborhood, focusedNeighborhoodId) {
   if (neighborhood.status === NEIGHBORHOOD_STATUS.COMPLETED) {
-    return { fill: '#ffd76a', stroke: '#ffe8a6', pulse: false };
+    const winnerKey = neighborhood.winner ?? 'tie';
+    const fill = ORIENTATION_COLORS[winnerKey] ?? '#ffd76a';
+    const stroke = ORIENTATION_STROKES[winnerKey] ?? '#ffe8a6';
+    return { fill, stroke, pulse: false };
   }
   if (neighborhood.status === NEIGHBORHOOD_STATUS.AVAILABLE) {
     const isFocused = neighborhood.id === focusedNeighborhoodId;
@@ -1338,6 +1462,10 @@ function showStoryDebrief({ board, city, neighborhood }) {
     } else {
       nextMessage = 'Review city intel to choose your next objective.';
     }
+    if (city?.completed && city.cityWinner) {
+      const cityMessage = getCityWinnerMessage(city.name, city.cityWinner);
+      nextMessage = nextMessage ? `${nextMessage} ${cityMessage}` : cityMessage;
+    }
     storyDebriefNext.textContent = nextMessage;
   }
 
@@ -1362,7 +1490,7 @@ function handleStoryMissionComplete(board) {
 
   const { cityId, neighborhoodId } = board.storyMission;
   if (board.winner) {
-    setNeighborhoodStatus(cityId, neighborhoodId, NEIGHBORHOOD_STATUS.COMPLETED);
+    setNeighborhoodStatus(cityId, neighborhoodId, NEIGHBORHOOD_STATUS.COMPLETED, { winner: board.winner });
   }
   refreshStoryState();
   const located = findNeighborhood(cityId, neighborhoodId);
@@ -1391,6 +1519,59 @@ function getNeighborhoodStatusLabel(status) {
     default:
       return 'Locked';
   }
+}
+
+function getCityWinnerLabel(winnerKey) {
+  switch (winnerKey) {
+    case 'horizontal':
+      return ORIENTATION_LABELS[ORIENTATION.HORIZONTAL];
+    case 'vertical':
+      return ORIENTATION_LABELS[ORIENTATION.VERTICAL];
+    case 'tie':
+      return 'Draw';
+    default:
+      return '';
+  }
+}
+
+function getCityWinnerMessage(cityName, winnerKey) {
+  if (winnerKey === 'horizontal' || winnerKey === 'vertical') {
+    return `${getCityWinnerLabel(winnerKey)} now controls ${cityName}.`;
+  }
+  if (winnerKey === 'tie') {
+    return `${cityName} remains contested (draw).`;
+  }
+  return '';
+}
+
+function getExtraMissionCity(extraMission) {
+  if (!extraMission || !extraMission.unlocked) {
+    return null;
+  }
+  const missionStatus = extraMission.status ?? NEIGHBORHOOD_STATUS.LOCKED;
+  const missionWinner = extraMission.winner ?? null;
+  const neighborhood = {
+    id: EXTRA_MISSION.id,
+    name: EXTRA_MISSION.name,
+    intro: EXTRA_MISSION.intro,
+    rows: EXTRA_MISSION.rows,
+    cols: EXTRA_MISSION.cols,
+    inactivePercentage: EXTRA_MISSION.inactivePercentage,
+    mask: EXTRA_MISSION.mask,
+    recommendedSeed: EXTRA_MISSION.recommendedSeed,
+    mapPosition: EXTRA_MISSION.mapPosition,
+    status: missionStatus,
+    winner: missionWinner,
+  };
+  return {
+    id: EXTRA_CITY_ID,
+    name: EXTRA_MISSION.name,
+    description: EXTRA_MISSION.description,
+    mapMeta: EXTRA_MISSION.mapMeta,
+    completed: missionStatus === NEIGHBORHOOD_STATUS.COMPLETED,
+    cityWinner: missionWinner,
+    neighborhoods: [neighborhood],
+  };
 }
 
 function createBackgroundTexture() {

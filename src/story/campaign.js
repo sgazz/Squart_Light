@@ -6,6 +6,30 @@ export const NEIGHBORHOOD_STATUS = {
   COMPLETED: 'completed',
 };
 
+export const EXTRA_CITY_ID = '__extra__mission__';
+
+export const EXTRA_MISSION = {
+  id: 'final-showdown',
+  name: 'Final Showdown',
+  description: 'A decisive duel offered when the campaign ends in a draw.',
+  intro: 'Both sides are evenly matched. One last clash will decide the fate of the skyline.',
+  rows: 12,
+  cols: 12,
+  inactivePercentage: 24,
+  recommendedSeed: 'final-showdown-01',
+  mask: createMask(12, 12, (row, col) => {
+    const border = row === 0 || col === 0 || row === 11 || col === 11;
+    const centralVoid = row >= 4 && row <= 7 && col >= 4 && col <= 7;
+    const diagonals = Math.abs(row - col) === 5 || Math.abs(row + col - 11) === 5;
+    return border || centralVoid || diagonals;
+  }),
+  mapMeta: {
+    size: { width: 320, height: 200 },
+    theme: 'final-showdown',
+  },
+  mapPosition: { x: 160, y: 110 },
+};
+
 function createMask(rows, cols, predicate) {
   const blocked = [];
   for (let row = 0; row < rows; row += 1) {
@@ -293,7 +317,15 @@ function persistProgress(progress) {
 }
 
 function ensureDefaults(progress) {
-  return enforceSequentialUnlocks({ ...progress });
+  const next = enforceSequentialUnlocks({ ...progress });
+  if (!next.extraMission) {
+    next.extraMission = {
+      unlocked: false,
+      status: NEIGHBORHOOD_STATUS.LOCKED,
+      winner: null,
+    };
+  }
+  return next;
 }
 
 export function initializeCampaignProgress() {
@@ -312,29 +344,67 @@ export function getCampaignState() {
       return {
         ...hood,
         status,
+        winner: cityProgress.neighborhoodResults?.[hood.id] ?? null,
       };
     });
     const completedCount = enrichedNeighborhoods.filter((hood) => hood.status === NEIGHBORHOOD_STATUS.COMPLETED).length;
     const availableCount = enrichedNeighborhoods.filter((hood) => hood.status === NEIGHBORHOOD_STATUS.AVAILABLE).length;
+    const totalCount = enrichedNeighborhoods.length;
     return {
       ...city,
       unlocked: cityProgress.unlocked ?? false,
+      completed: cityProgress.completed ?? false,
+      cityWinner: cityProgress.cityWinner ?? null,
       neighborhoods: enrichedNeighborhoods,
       completedCount,
       availableCount,
-      totalCount: enrichedNeighborhoods.length,
+      totalCount,
     };
   });
-  return { cities };
+  const extra = progress.extraMission ?? {
+    unlocked: false,
+    status: NEIGHBORHOOD_STATUS.LOCKED,
+    winner: null,
+  };
+  const extraMission = {
+    unlocked: Boolean(extra.unlocked),
+    status: extra.status ?? NEIGHBORHOOD_STATUS.LOCKED,
+    winner: extra.winner ?? null,
+    ...EXTRA_MISSION,
+  };
+  return { cities, extraMission };
 }
 
-export function setNeighborhoodStatus(cityId, neighborhoodId, status) {
+export function setNeighborhoodStatus(cityId, neighborhoodId, status, meta = {}) {
   const progress = ensureDefaults(readProgress());
+  if (cityId === EXTRA_CITY_ID) {
+    const extra = progress.extraMission ?? {
+      unlocked: false,
+      status: NEIGHBORHOOD_STATUS.LOCKED,
+      winner: null,
+    };
+    extra.status = status;
+    if (status === NEIGHBORHOOD_STATUS.COMPLETED) {
+      extra.winner = meta.winner ?? null;
+    } else {
+      extra.winner = null;
+    }
+    progress.extraMission = extra;
+    enforceSequentialUnlocks(progress);
+    persistProgress(progress);
+    return;
+  }
   const cityProgress = progress[cityId];
   if (!cityProgress) {
     return;
   }
   cityProgress.neighborhoods[neighborhoodId] = status;
+  cityProgress.neighborhoodResults = cityProgress.neighborhoodResults ?? {};
+  if (status === NEIGHBORHOOD_STATUS.COMPLETED && meta.winner) {
+    cityProgress.neighborhoodResults[neighborhoodId] = meta.winner;
+  } else if (status !== NEIGHBORHOOD_STATUS.COMPLETED) {
+    delete cityProgress.neighborhoodResults[neighborhoodId];
+  }
   if (status === NEIGHBORHOOD_STATUS.COMPLETED) {
     unlockNextNeighborhood(progress, cityId, neighborhoodId);
   }
@@ -375,6 +445,28 @@ export function resetCampaignProgress() {
 }
 
 export function findNeighborhood(cityId, neighborhoodId) {
+  const progress = ensureDefaults({ ...readProgress() });
+  if (cityId === EXTRA_CITY_ID) {
+    const extra = progress.extraMission ?? {
+      unlocked: false,
+      status: NEIGHBORHOOD_STATUS.LOCKED,
+      winner: null,
+    };
+    const mission = {
+      ...EXTRA_MISSION,
+      status: extra.status ?? NEIGHBORHOOD_STATUS.LOCKED,
+      winner: extra.winner ?? null,
+    };
+    const city = {
+      id: EXTRA_CITY_ID,
+      name: EXTRA_MISSION.name,
+      description: EXTRA_MISSION.description,
+      completed: mission.status === NEIGHBORHOOD_STATUS.COMPLETED,
+      cityWinner: mission.winner ?? null,
+      neighborhoods: [mission],
+    };
+    return { city, neighborhood: mission };
+  }
   const { cities } = getCampaignState();
   const city = cities.find((item) => item.id === cityId);
   if (!city) {
@@ -389,17 +481,20 @@ export function findNeighborhood(cityId, neighborhoodId) {
 
 function enforceSequentialUnlocks(progress) {
   let previousCompleted = true;
+  const globalTally = { horizontal: 0, vertical: 0 };
   CAMPAIGN_CITIES.forEach((city) => {
     const cityProgress = progress[city.id] ?? { unlocked: false, neighborhoods: {} };
     if (!cityProgress.neighborhoods) {
       cityProgress.neighborhoods = {};
     }
+    cityProgress.neighborhoodResults = cityProgress.neighborhoodResults ?? {};
 
     if (previousCompleted) {
       cityProgress.unlocked = true;
     }
 
     let allCompleted = true;
+    const completionTally = { horizontal: 0, vertical: 0 };
     city.neighborhoods.forEach((hood, index) => {
       const currentStatus = cityProgress.neighborhoods[hood.id];
       if (!currentStatus) {
@@ -409,14 +504,68 @@ function enforceSequentialUnlocks(progress) {
         cityProgress.neighborhoods[hood.id] = NEIGHBORHOOD_STATUS.AVAILABLE;
       }
 
-      if (cityProgress.neighborhoods[hood.id] !== NEIGHBORHOOD_STATUS.COMPLETED) {
+      if (cityProgress.neighborhoods[hood.id] === NEIGHBORHOOD_STATUS.COMPLETED) {
+        const win = cityProgress.neighborhoodResults?.[hood.id];
+        if (win === 'horizontal') {
+          completionTally.horizontal += 1;
+        } else if (win === 'vertical') {
+          completionTally.vertical += 1;
+        }
+      } else {
+        delete cityProgress.neighborhoodResults[hood.id];
         allCompleted = false;
       }
     });
 
+    cityProgress.completed = allCompleted;
+    cityProgress.cityWinner = allCompleted ? determineCityWinner(completionTally) : null;
+    if (cityProgress.cityWinner === 'horizontal') {
+      globalTally.horizontal += 1;
+    } else if (cityProgress.cityWinner === 'vertical') {
+      globalTally.vertical += 1;
+    }
+
     progress[city.id] = cityProgress;
     previousCompleted = previousCompleted && allCompleted;
   });
+  updateExtraMission(progress, globalTally);
   return progress;
+}
+
+function determineCityWinner(tally) {
+  const horizontal = tally.horizontal ?? 0;
+  const vertical = tally.vertical ?? 0;
+  if (horizontal === 0 && vertical === 0) {
+    return null;
+  }
+  if (horizontal === vertical) {
+    return 'tie';
+  }
+  return horizontal > vertical ? 'horizontal' : 'vertical';
+}
+
+function updateExtraMission(progress, globalTally) {
+  const extra = progress.extraMission ?? {
+    unlocked: false,
+    status: NEIGHBORHOOD_STATUS.LOCKED,
+    winner: null,
+  };
+  const horizontalWins = globalTally.horizontal ?? 0;
+  const verticalWins = globalTally.vertical ?? 0;
+  const hasCampaignDraw = horizontalWins === verticalWins && (horizontalWins + verticalWins) > 0;
+
+  if (hasCampaignDraw) {
+    extra.unlocked = true;
+    if (extra.status !== NEIGHBORHOOD_STATUS.COMPLETED) {
+      extra.status = NEIGHBORHOOD_STATUS.AVAILABLE;
+      extra.winner = null;
+    }
+  } else if (extra.status !== NEIGHBORHOOD_STATUS.COMPLETED) {
+    extra.unlocked = false;
+    extra.status = NEIGHBORHOOD_STATUS.LOCKED;
+    extra.winner = null;
+  }
+
+  progress.extraMission = extra;
 }
 
