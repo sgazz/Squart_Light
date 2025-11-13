@@ -5,7 +5,6 @@ const CELL_HEIGHT = 0.2;
 const INACTIVE_HEIGHT_MULTIPLIER = 2.4;
 const ACTIVE_COLOR = 0xe6ebff;
 const BASE_TILE_COLOR = 0x101426;
-const BASE_EDGE_COLOR = 0xf1c24a;
 const BASE_HEIGHT = 0.07;
 const BASE_EDGE_HEIGHT = 0.16;
 const BASE_EDGE_THICKNESS = 0.11;
@@ -442,8 +441,13 @@ function buildBaseGroup(board, xOffset, zOffset) {
     roughness: 0.65,
     metalness: 0.08,
   });
-  const edgeMaterial = new THREE.MeshStandardMaterial({
-    color: BASE_EDGE_COLOR,
+  const horizontalEdgeMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffd76a,
+    roughness: 0.55,
+    metalness: 0.12,
+  });
+  const verticalEdgeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4ecb89,
     roughness: 0.55,
     metalness: 0.12,
   });
@@ -472,7 +476,7 @@ function buildBaseGroup(board, xOffset, zOffset) {
         col: colIndex,
         direction: 'north',
         edgeGeometry: horizontalEdgeGeometry,
-        edgeMaterial,
+        edgeMaterial: horizontalEdgeMaterial,
         edgeGroup: baseGroup,
         glowGroup,
         glowMaterial,
@@ -487,7 +491,7 @@ function buildBaseGroup(board, xOffset, zOffset) {
         col: colIndex,
         direction: 'south',
         edgeGeometry: horizontalEdgeGeometry,
-        edgeMaterial,
+        edgeMaterial: horizontalEdgeMaterial,
         edgeGroup: baseGroup,
         glowGroup,
         glowMaterial,
@@ -502,7 +506,7 @@ function buildBaseGroup(board, xOffset, zOffset) {
         col: colIndex,
         direction: 'west',
         edgeGeometry: verticalEdgeGeometry,
-        edgeMaterial,
+        edgeMaterial: verticalEdgeMaterial,
         edgeGroup: baseGroup,
         glowGroup,
         glowMaterial,
@@ -517,7 +521,7 @@ function buildBaseGroup(board, xOffset, zOffset) {
         col: colIndex,
         direction: 'east',
         edgeGeometry: verticalEdgeGeometry,
-        edgeMaterial,
+        edgeMaterial: verticalEdgeMaterial,
         edgeGroup: baseGroup,
         glowGroup,
         glowMaterial,

@@ -68,8 +68,15 @@
 
       #panel input[type='range'] {
         padding: 0;
-        accent-color: #1f6feb;
         cursor: pointer;
+      }
+
+      #board-rows {
+        accent-color: #4ecb89;
+      }
+
+      #board-cols {
+        accent-color: #ffd76a;
       }
 
       .slider-field {
@@ -115,17 +122,21 @@
       #panel button {
         padding: 0.7rem 1rem;
         border-radius: 0.6rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: #1f6feb;
+        border: 1px solid rgba(79, 125, 255, 0.4);
+        background: #4f7dff;
         color: #ffffff;
         font-weight: 600;
         cursor: pointer;
         transition: transform 0.1s ease, box-shadow 0.1s ease;
       }
 
+      #panel .wide-button {
+        width: 100%;
+      }
+
       #panel button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(31, 111, 235, 0.35);
+        box-shadow: 0 8px 20px rgba(79, 125, 255, 0.35);
       }
 
       #panel .secondary-button {
@@ -140,9 +151,14 @@
       }
 
       .button-group {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
         gap: 0.75rem;
+      }
+
+      #random-orientation-output {
+        font-size: 0.85rem;
+        opacity: 0.85;
+        margin-top: -0.2rem;
       }
 
       #percentage-display {
@@ -150,8 +166,22 @@
         opacity: 0.85;
       }
 
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-bottom: 0.5rem;
+      }
+
+      .panel-heading {
+        margin: 0;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: rgba(229, 236, 255, 0.6);
+      }
+
       #turn-indicator {
-        margin-top: 1rem;
         padding: 0.65rem 0.75rem;
         border-radius: 0.6rem;
         background: rgba(255, 255, 255, 0.08);
@@ -165,33 +195,19 @@
         transform: translateY(-2px);
       }
 
-      #stats {
-        margin-top: auto;
+      .panel-summary-line {
         font-size: 0.9rem;
-        opacity: 0.9;
-        line-height: 1.4;
+        color: rgba(229, 236, 255, 0.85);
+      }
+
+      .panel-summary-line.hidden {
         display: none;
       }
 
-      #remaining-moves {
-        margin-top: 0.75rem;
-        display: grid;
-        grid-template-columns: auto auto;
-        gap: 0.35rem 0.5rem;
-        font-size: 0.85rem;
-        opacity: 0.85;
-      }
-
-      #remaining-moves .moves-label {
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-size: 0.75rem;
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      #remaining-moves span[id^='moves-'] {
-        font-weight: 600;
-        justify-self: end;
+      .panel-summary-sub {
+        font-size: 0.8rem;
+        color: rgba(229, 236, 255, 0.6);
+        letter-spacing: 0.03em;
       }
 
       #board-feedback {
@@ -238,23 +254,13 @@
       }
 
       #hotkeys-panel {
-        margin-top: 1.5rem;
-        padding: 0.9rem 1rem;
-        border-radius: 0.75rem;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.02);
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
         font-size: 0.85rem;
         display: grid;
         gap: 0.4rem;
-        display: none;
-      }
-
-      #hotkeys-panel h2 {
-        margin: 0;
-        font-size: 0.85rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.6);
       }
 
       #hotkeys-panel ul {
@@ -671,54 +677,64 @@
     </header>
     <div id="app">
       <aside id="panel">
-        <div class="slider-field" title="Adjust the number of rows (vertical size) for the board.">
-          <label class="panel-label" for="board-rows">Rows</label>
-          <div class="slider-control">
-            <input id="board-rows" type="range" min="5" max="20" step="1" value="10" />
-            <span id="board-rows-value" class="slider-value">10</span>
+        <section class="panel-section">
+          <h2 class="panel-heading">Board Setup</h2>
+          <div class="slider-field" title="Adjust the number of rows (vertical size) for the board.">
+            <label class="panel-label" for="board-rows">Rows</label>
+            <div class="slider-control">
+              <input id="board-rows" type="range" min="5" max="20" step="1" value="10" />
+              <span id="board-rows-value" class="slider-value">10</span>
+            </div>
           </div>
-        </div>
-        <div class="slider-field" title="Adjust the number of columns (horizontal size) for the board.">
-          <label class="panel-label" for="board-cols">Columns</label>
-          <div class="slider-control">
-            <input id="board-cols" type="range" min="5" max="20" step="1" value="10" />
-            <span id="board-cols-value" class="slider-value">10</span>
+          <div class="slider-field" title="Adjust the number of columns (horizontal size) for the board.">
+            <label class="panel-label" for="board-cols">Columns</label>
+            <div class="slider-control">
+              <input id="board-cols" type="range" min="5" max="20" step="1" value="10" />
+              <span id="board-cols-value" class="slider-value">10</span>
+            </div>
           </div>
-        </div>
-        <label class="panel-label" title="Enter a value to reproduce the same inactive-square layout.">
-          Seed (optional)
-          <input id="seed-input" type="text" placeholder="Random" />
-        </label>
-        <label
-          class="panel-label"
-          title="Set the percentage of inactive squares (0–90%). Use the default button to return to 17–19% randomness."
-        >
-          Inactive Squares (%)
-          <input id="inactive-percentage" type="range" min="0" max="90" step="1" value="17" />
-        </label>
-        <div id="percentage-display">Default random (17–19%)</div>
-        <div class="button-group">
-          <button id="regenerate-btn" type="button">Regenerate Board</button>
-          <button id="default-percentage-btn" type="button" class="secondary-button">Default 17–19%</button>
-        </div>
-        <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
-        <div id="stats">
-          <div id="board-stats">Inactive squares: —</div>
-          <div id="remaining-moves" aria-live="polite">
-            <span class="moves-label">Horizontal moves</span>
-            <span id="moves-horizontal">—</span>
-            <span class="moves-label">Vertical moves</span>
-            <span id="moves-vertical">—</span>
+          <label
+            class="panel-label"
+            title="Set the percentage of inactive squares (0–90%). Use the default button to return to 17–19% randomness."
+          >
+            Inactive Squares
+            <div class="slider-control">
+              <input id="inactive-percentage" type="range" min="0" max="90" step="1" value="17" />
+              <span id="inactive-percentage-value" class="slider-value">17%</span>
+            </div>
+          </label>
+          <button id="default-percentage-btn" type="button" class="wide-button default-game-button">
+            Default game
+          </button>
+          <label class="panel-label" title="Enter a value to reproduce the same inactive-square layout.">
+            Seed (optional)
+            <input id="seed-input" type="text" placeholder="Random" />
+          </label>
+          <div class="button-group">
+            <button id="regenerate-btn" type="button" class="wide-button">Regenerate Board</button>
+            <button id="random-orientation-btn" type="button" class="wide-button secondary-button">
+              Randomize Start
+            </button>
           </div>
-        </div>
-        <div id="hotkeys-panel">
-          <h2>Shortcuts</h2>
-          <ul>
-            <li><kbd>H</kbd> Highlight horizontal player</li>
-            <li><kbd>V</kbd> Highlight vertical player</li>
-            <li><kbd>R</kbd> Regenerate board</li>
-          </ul>
-        </div>
+        </section>
+        <section class="panel-section">
+          <h2 class="panel-heading">Current Status</h2>
+          <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
+          <div id="panel-board-summary" class="panel-summary-line">Board —</div>
+          <div id="panel-story-summary" class="panel-summary-line hidden"></div>
+          <div id="panel-balance-summary" class="panel-summary-sub"></div>
+        </section>
+        <section class="panel-section">
+          <h2 class="panel-heading">Shortcuts</h2>
+          <div id="hotkeys-panel">
+            <ul>
+              <li><kbd>H</kbd> highlight horizontal player</li>
+              <li><kbd>V</kbd> highlight vertical player</li>
+              <li><kbd>R</kbd> regenerate board</li>
+              <li><kbd>G</kbd> toggle game guide</li>
+            </ul>
+          </div>
+        </section>
         <div id="board-feedback" role="status" aria-live="polite"></div>
         <div id="panel-footer">
           <button id="story-btn" type="button">Story Mode</button>

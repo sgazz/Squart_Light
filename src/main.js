@@ -21,14 +21,15 @@ const colSlider = document.getElementById('board-cols');
 const colValue = document.getElementById('board-cols-value');
 const seedInput = document.getElementById('seed-input');
 const percentageSlider = document.getElementById('inactive-percentage');
-const percentageDisplay = document.getElementById('percentage-display');
+const percentageValue = document.getElementById('inactive-percentage-value');
 const regenerateButton = document.getElementById('regenerate-btn');
 const defaultPercentageButton = document.getElementById('default-percentage-btn');
 const guideButton = document.getElementById('guide-btn');
-const statsElement = document.getElementById('board-stats');
+const randomOrientationButton = document.getElementById('random-orientation-btn');
 const turnIndicator = document.getElementById('turn-indicator');
-const movesHorizontalElement = document.getElementById('moves-horizontal');
-const movesVerticalElement = document.getElementById('moves-vertical');
+const panelBoardSummary = document.getElementById('panel-board-summary');
+const panelStorySummary = document.getElementById('panel-story-summary');
+const panelBalanceSummary = document.getElementById('panel-balance-summary');
 const boardFeedback = document.getElementById('board-feedback');
 const onboardingOverlay = document.getElementById('onboarding-overlay');
 const onboardingDismiss = document.getElementById('onboarding-dismiss');
@@ -157,6 +158,7 @@ let selectedStoryNeighborhoodId = null;
 let storyMissionConfig = null;
 let pendingStoryMission = null;
 let storyDebriefVisible = false;
+let randomOrientationChoice = null;
 
 function init() {
   initDimensionSliders();
@@ -170,6 +172,9 @@ function init() {
   rowSlider.addEventListener('input', handleDimensionChange);
   colSlider.addEventListener('input', handleDimensionChange);
   document.addEventListener('keydown', handleShortcutKeys);
+  if (randomOrientationButton) {
+    randomOrientationButton.addEventListener('click', handleRandomOrientation);
+  }
   if (guideButton) {
     guideButton.addEventListener('click', showGuideOverlay);
   }
@@ -276,6 +281,11 @@ function regenerateBoard() {
   } else if (boardData.storyMission) {
     delete boardData.storyMission;
   }
+  if (!storyMissionConfig && randomOrientationChoice) {
+    applyRandomOrientationToBoard(true);
+  } else if (boardData) {
+    delete boardData.startingPlayerLabel;
+  }
   lastFairnessInfo = {
     horizontalMoves: stats.horizontalMoves,
     verticalMoves: stats.verticalMoves,
@@ -336,46 +346,49 @@ function updateBoardGroup() {
 }
 
 function updateStats() {
+  if (!panelBoardSummary) {
+    return;
+  }
+
   if (!boardData) {
-    statsElement.textContent = '';
+    panelBoardSummary.textContent = 'Board —';
+    if (panelStorySummary) {
+      panelStorySummary.textContent = '';
+      panelStorySummary.classList.add('hidden');
+    }
+    if (panelBalanceSummary) {
+      panelBalanceSummary.textContent = '';
+    }
     return;
   }
 
   const inactivePercentage =
     typeof boardData.actualInactivePercentage === 'number' ? boardData.actualInactivePercentage : 0;
-  const placementCount = boardData.placements.length;
-  const totalSquares = boardData.totalSquareCount ?? boardData.cols * boardData.rows;
-  const playableSquares = boardData.playableSquareCount ?? totalSquares;
-  const excludedSquares = Math.max(0, totalSquares - playableSquares);
-  const baseInfo = `Inactive squares: <strong>${boardData.inactiveCount}</strong> (${inactivePercentage.toFixed(
-    1
-  )}%)<br />Board size: ${boardData.cols} × ${boardData.rows}<br />Dominoes placed: ${placementCount}`;
-  const maskInfo =
-    excludedSquares > 0
-      ? `<br />Playable squares: <strong>${playableSquares}</strong> (mask excluded ${excludedSquares})`
-      : '';
+  const summaryParts = [
+    `Board ${boardData.cols} × ${boardData.rows}`,
+    `Inactive ${inactivePercentage.toFixed(1)}%`,
+  ];
+  if (boardData.seed) {
+    summaryParts.push(`Seed ${boardData.seed}`);
+  }
+  if (!storyMissionConfig && boardData.startingPlayerLabel) {
+    summaryParts.push(`Start ${boardData.startingPlayerLabel}`);
+  }
+  panelBoardSummary.textContent = summaryParts.join(' • ');
 
-  const modeInfo =
-    boardData.requestedInactivePercentage === null
-      ? 'Mode: Default random (17–19%)'
-      : `Custom target: ${boardData.requestedInactivePercentage}%`;
-
-  const statusInfo =
-    boardData.status === GAME_STATUS.FINISHED
-      ? boardData.winner
-        ? `Result: <strong>${ORIENTATION_LABELS[boardData.winner]} wins</strong>`
-        : '<strong>Result: Draw</strong>'
-      : 'Game status: <strong>In progress</strong>';
-
-  const fairnessInfo = lastFairnessInfo
-    ? `Move balance: <strong>Δ=${lastFairnessInfo.diff}</strong> (H=${lastFairnessInfo.horizontalMoves}, V=${lastFairnessInfo.verticalMoves}${
-        lastFairnessInfo.attempts > 1 ? `, attempts ${lastFairnessInfo.attempts}` : ''
-      }${lastFairnessInfo.seedProvided ? ', seed' : ''})`
-    : '';
-
-  statsElement.innerHTML = `${baseInfo}${maskInfo}<br />${modeInfo}<br />${statusInfo}${
-    fairnessInfo ? `<br />${fairnessInfo}` : ''
-  }`;
+  if (panelStorySummary) {
+    if (boardData.storyMission) {
+      const mission = boardData.storyMission;
+      const missionName =
+        mission.neighborhoodName ?? mission.neighborhoodId ?? mission.id ?? 'Story mission';
+      const cityLabel = mission.cityName ? `${mission.cityName} — ${missionName}` : missionName;
+      panelStorySummary.textContent = `Story mission: ${cityLabel}`;
+      panelStorySummary.classList.remove('hidden');
+    } else {
+      panelStorySummary.textContent = '';
+      panelStorySummary.classList.add('hidden');
+    }
+  }
 }
 
 function updateCamera(rows, cols) {
@@ -412,10 +425,11 @@ function handleDefaultPercentage() {
 }
 
 function updatePercentageDisplay() {
-  if (customInactivePercentage === null) {
-    percentageDisplay.textContent = 'Default random (17–19%)';
-  } else {
-    percentageDisplay.textContent = `Custom inactive percentage: ${customInactivePercentage}%`;
+  const percent =
+    customInactivePercentage === null ? '17–19%' : `${customInactivePercentage}%`;
+  if (percentageValue) {
+    percentageValue.textContent =
+      customInactivePercentage === null ? 'Auto' : `${customInactivePercentage}%`;
   }
 }
 
@@ -482,20 +496,34 @@ function scheduleRegenerateBoard(immediate = false) {
 }
 
 function updateRemainingMoves() {
-  if (!movesHorizontalElement || !movesVerticalElement) {
+  if (!panelBalanceSummary) {
     return;
   }
 
   if (!boardData) {
-    movesHorizontalElement.textContent = '—';
-    movesVerticalElement.textContent = '—';
+    panelBalanceSummary.textContent = '';
+    return;
+  }
+
+  if (boardData.status === GAME_STATUS.FINISHED) {
+    const resultText = boardData.winner
+      ? `Winner: ${ORIENTATION_LABELS[boardData.winner]}`
+      : 'Result: Draw';
+    panelBalanceSummary.textContent = resultText;
     return;
   }
 
   const horizontalMoves = countAvailableMoves(boardData, ORIENTATION.HORIZONTAL);
   const verticalMoves = countAvailableMoves(boardData, ORIENTATION.VERTICAL);
-  movesHorizontalElement.textContent = horizontalMoves.toString();
-  movesVerticalElement.textContent = verticalMoves.toString();
+  let summary = `Moves available: H ${horizontalMoves} • V ${verticalMoves}`;
+  if (lastFairnessInfo) {
+    if (lastFairnessInfo.diff === 0) {
+      summary += ' • Balanced';
+    } else {
+      summary += ` • Δ ${lastFairnessInfo.diff}`;
+    }
+  }
+  panelBalanceSummary.textContent = summary;
 }
 
 function updateTurnIndicator() {
@@ -516,8 +544,16 @@ function updateTurnIndicator() {
     return;
   }
 
-  const label = boardData.currentPlayer === ORIENTATION.HORIZONTAL ? ORIENTATION_LABELS[ORIENTATION.HORIZONTAL] : ORIENTATION_LABELS[ORIENTATION.VERTICAL];
-  turnIndicator.textContent = `${label} to move`;
+  const label =
+    boardData.currentPlayer === ORIENTATION.HORIZONTAL
+      ? ORIENTATION_LABELS[ORIENTATION.HORIZONTAL]
+      : ORIENTATION_LABELS[ORIENTATION.VERTICAL];
+  const placementCount = boardData.placements?.length ?? 0;
+  const starterSuffix =
+    placementCount === 0 && boardData.startingPlayerLabel
+      ? ` — ${boardData.startingPlayerLabel}`
+      : '';
+  turnIndicator.textContent = `${label} to move${starterSuffix}`;
   pulseTurnIndicator();
 }
 
@@ -1573,6 +1609,45 @@ function getExtraMissionCity(extraMission) {
     cityWinner: missionWinner,
     neighborhoods: [neighborhood],
   };
+}
+
+function handleRandomOrientation() {
+  if (storyMissionConfig) {
+    if (turnIndicator) {
+      turnIndicator.textContent = 'Story mission enforces starting team.';
+    }
+    return;
+  }
+  const orientation =
+    Math.random() < 0.5 ? ORIENTATION.HORIZONTAL : ORIENTATION.VERTICAL;
+  const player = Math.random() < 0.5 ? 'P1' : 'P2';
+  randomOrientationChoice = { orientation, player };
+  const orientationName = orientation === ORIENTATION.HORIZONTAL ? 'Horizontal' : 'Vertical';
+  const displayText = `${orientationName}-${player}`;
+  showFeedback(`Starting orientation: ${displayText}`, 'info', 1400);
+  applyRandomOrientationToBoard();
+  updateStats();
+  updateRemainingMoves();
+}
+
+function applyRandomOrientationToBoard(force = false) {
+  if (!randomOrientationChoice || !boardData || storyMissionConfig) {
+    return;
+  }
+  if (boardData.status !== GAME_STATUS.ACTIVE) {
+    if (!force) {
+      return;
+    }
+    boardData.status = GAME_STATUS.ACTIVE;
+    boardData.winner = null;
+  }
+  const placementCount = boardData.placements?.length ?? 0;
+  if (!force && placementCount > 0) {
+    return;
+  }
+  boardData.currentPlayer = randomOrientationChoice.orientation;
+  boardData.startingPlayerLabel = randomOrientationChoice.player;
+  updateTurnIndicator();
 }
 
 function createBackgroundTexture() {
