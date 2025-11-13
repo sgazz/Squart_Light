@@ -326,7 +326,8 @@ function updateBoardGroup() {
     scene.remove(boardGroup);
   }
 
-  boardGroup = buildBoardGroup(boardData);
+  const simpleInactive = !storyMissionConfig;
+  boardGroup = buildBoardGroup(boardData, { simpleInactive });
   cellMeshes = boardGroup.userData?.cellMeshes ?? [];
   scene.add(boardGroup);
   dominoAnimations.length = 0;

@@ -87,7 +87,14 @@ const DOMINO_MATERIALS = {
   vertical: verticalDominoMaterials,
 };
 
-export function buildBoardGroup(board) {
+const SIMPLE_INACTIVE_MATERIAL = new THREE.MeshStandardMaterial({
+  color: 0x111111,
+  roughness: 0.85,
+  metalness: 0.1,
+});
+
+export function buildBoardGroup(board, options = {}) {
+  const { simpleInactive = false } = options;
   const group = new THREE.Group();
   group.name = 'squart-board';
 
@@ -104,9 +111,9 @@ export function buildBoardGroup(board) {
     group.add(baseGroup);
   }
 
-  const parkGeometries = createParkGeometries();
-  const buildingGeometries = createBuildingGeometries();
-  const shouldUsePark = createParkSelector(board);
+  const parkGeometries = simpleInactive ? null : createParkGeometries();
+  const buildingGeometries = simpleInactive ? null : createBuildingGeometries();
+  const shouldUsePark = simpleInactive ? null : createParkSelector(board);
 
   const cellMeshes = [];
   const inactiveWaveTargets = [];
@@ -121,9 +128,10 @@ export function buildBoardGroup(board) {
         ? createInactiveMesh({
             row: cell.row,
             col: cell.col,
-            usePark: shouldUsePark(rowIndex, colIndex),
+            usePark: !simpleInactive && shouldUsePark ? shouldUsePark(rowIndex, colIndex) : false,
             parkGeometries,
             buildingGeometries,
+            simpleInactive,
           })
         : new THREE.Mesh(activeGeometry, activeMaterial);
       mesh.position.set(colIndex * CELL_SIZE - xOffset, 0, rowIndex * CELL_SIZE - zOffset);
@@ -234,7 +242,16 @@ export function addDominoMesh(group, placement) {
   return mesh;
 }
 
-function createInactiveMesh({ row, col, usePark, parkGeometries, buildingGeometries }) {
+function createInactiveMesh({ row, col, usePark, parkGeometries, buildingGeometries, simpleInactive }) {
+  if (simpleInactive) {
+    const height = CELL_HEIGHT * 2.4;
+    const geometry = new THREE.BoxGeometry(CELL_SIZE * 0.95, height, CELL_SIZE * 0.95);
+    geometry.translate(0, height / 2, 0);
+    const mesh = new THREE.Mesh(geometry, SIMPLE_INACTIVE_MATERIAL);
+    mesh.userData = { inactiveCore: mesh, row, col };
+    return mesh;
+  }
+
   if (usePark) {
     return createParkMesh({
       geometries: parkGeometries,
