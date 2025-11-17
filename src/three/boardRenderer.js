@@ -1,10 +1,11 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const CELL_SIZE = 1;
 const CELL_HEIGHT = 0.2;
 const INACTIVE_HEIGHT_MULTIPLIER = 2.4;
 const ACTIVE_COLOR = 0xe6ebff;
-const BASE_TILE_COLOR = 0x101426;
+const BASE_TILE_COLOR = 0xff6b35;
 const BASE_HEIGHT = 0.07;
 const BASE_EDGE_HEIGHT = 0.16;
 const BASE_EDGE_THICKNESS = 0.11;
@@ -90,6 +91,15 @@ const SIMPLE_INACTIVE_MATERIAL = new THREE.MeshStandardMaterial({
   color: 0x111111,
   roughness: 0.85,
   metalness: 0.1,
+});
+
+const inactiveTopGlowMaterial = new THREE.MeshBasicMaterial({
+  color: 0x9333ea,
+  transparent: true,
+  opacity: 0.8,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
 });
 
 export function buildBoardGroup(board, options = {}) {
@@ -248,6 +258,10 @@ function createInactiveMesh({ row, col, usePark, parkGeometries, buildingGeometr
     geometry.translate(0, height / 2, 0);
     const mesh = new THREE.Mesh(geometry, SIMPLE_INACTIVE_MATERIAL);
     mesh.userData = { inactiveCore: mesh, row, col };
+    
+    // Dodaj glow na gornje ivice
+    addTopEdgeGlow(mesh, height, CELL_SIZE * 0.95);
+    
     return mesh;
   }
 
@@ -314,6 +328,12 @@ function createParkMesh({ geometries, materials, row, col }) {
     col,
   };
 
+  // Dodaj glow na vrh krošnje
+  const canopyTopY = geometries.baseHeight + geometries.grassHeight + geometries.trunkHeight + geometries.canopyOffsetY;
+  const canopyRadius = CELL_SIZE * 0.28;
+  const actualCanopyRadius = canopyRadius * canopyScale;
+  addTopEdgeGlow(park, canopyTopY + actualCanopyRadius, CELL_SIZE * 0.95);
+
   return park;
 }
 
@@ -365,6 +385,10 @@ function createBuildingMesh({ geometries, materials, row, col }) {
     row,
     col,
   };
+
+  // Dodaj glow na vrh krova
+  const roofTopY = geometries.baseHeight + geometries.bodyHeight * heightFactor + geometries.roofHeight;
+  addTopEdgeGlow(building, roofTopY, CELL_SIZE * 0.95);
 
   return building;
 }
@@ -696,4 +720,40 @@ function hashString(value) {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
   return hash;
+}
+
+function addTopEdgeGlow(parentMesh, topY, cellSize) {
+  const glowWidth = cellSize * 0.95;
+  const glowOffset = 0.01;
+  const edgeThickness = 0.03;
+  const edgeHeight = 0.015;
+  const cornerRadius = 0.015; // zaobljene ivice
+
+  // Severna ivica (north edge - pozitivna X)
+  const northGlow = new RoundedBoxGeometry(edgeThickness, edgeHeight, glowWidth, 2, cornerRadius);
+  const northMesh = new THREE.Mesh(northGlow, inactiveTopGlowMaterial.clone());
+  northMesh.position.set(glowWidth / 2, topY + glowOffset, 0);
+  northMesh.renderOrder = 10;
+  parentMesh.add(northMesh);
+
+  // Južna ivica (south edge - negativna X)
+  const southGlow = new RoundedBoxGeometry(edgeThickness, edgeHeight, glowWidth, 2, cornerRadius);
+  const southMesh = new THREE.Mesh(southGlow, inactiveTopGlowMaterial.clone());
+  southMesh.position.set(-glowWidth / 2, topY + glowOffset, 0);
+  southMesh.renderOrder = 10;
+  parentMesh.add(southMesh);
+
+  // Istočna ivica (east edge - pozitivna Z)
+  const eastGlow = new RoundedBoxGeometry(glowWidth, edgeHeight, edgeThickness, 2, cornerRadius);
+  const eastMesh = new THREE.Mesh(eastGlow, inactiveTopGlowMaterial.clone());
+  eastMesh.position.set(0, topY + glowOffset, glowWidth / 2);
+  eastMesh.renderOrder = 10;
+  parentMesh.add(eastMesh);
+
+  // Zapadna ivica (west edge - negativna Z)
+  const westGlow = new RoundedBoxGeometry(glowWidth, edgeHeight, edgeThickness, 2, cornerRadius);
+  const westMesh = new THREE.Mesh(westGlow, inactiveTopGlowMaterial.clone());
+  westMesh.position.set(0, topY + glowOffset, -glowWidth / 2);
+  westMesh.renderOrder = 10;
+  parentMesh.add(westMesh);
 }

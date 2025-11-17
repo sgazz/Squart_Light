@@ -8,6 +8,11 @@
       :root {
         color-scheme: dark;
         font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        scroll-behavior: smooth;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
@@ -17,17 +22,24 @@
         min-height: 100vh;
         background: #050505;
         color: #f5f5f5;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       header {
-        padding: 1rem 1.5rem;
+        padding: 1.25rem 1.5rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(10px);
+        background: rgba(5, 5, 5, 0.7);
       }
 
       h1 {
         font-size: 1.25rem;
         margin: 0;
         font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.4;
       }
 
       #app {
@@ -41,10 +53,31 @@
       #panel {
         padding: 1.5rem;
         background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(20px);
         border-right: 1px solid rgba(255, 255, 255, 0.08);
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 1.25rem;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+      }
+
+      #panel::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      #panel::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      #panel::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+      }
+
+      #panel::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.15);
       }
 
       .panel-label {
@@ -64,6 +97,21 @@
         background: rgba(0, 0, 0, 0.35);
         color: inherit;
         font-size: 0.95rem;
+        transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      #panel input:focus,
+      #panel select:focus {
+        outline: none;
+        border-color: rgba(79, 125, 255, 0.5);
+        background: rgba(0, 0, 0, 0.45);
+        box-shadow: 0 0 0 3px rgba(79, 125, 255, 0.1);
+      }
+
+      #panel input:hover:not(:focus),
+      #panel select:hover:not(:focus) {
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(0, 0, 0, 0.4);
       }
 
       #panel input[type='range'] {
@@ -103,6 +151,12 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 0.6rem;
         background: rgba(0, 0, 0, 0.35);
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+      }
+
+      .slider-control:hover {
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(0, 0, 0, 0.4);
       }
 
       .slider-control input[type='range'] {
@@ -127,7 +181,18 @@
         color: #ffffff;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.1s ease, box-shadow 0.1s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      #panel button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(79, 125, 255, 0.3);
+      }
+
+      #panel button:active {
+        transform: translateY(0);
       }
 
       #panel .wide-button {
@@ -135,8 +200,9 @@
       }
 
       #panel button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(79, 125, 255, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(79, 125, 255, 0.4);
+        background: #5a87ff;
       }
 
       #panel .secondary-button {
@@ -147,7 +213,13 @@
       }
 
       #panel .secondary-button:hover {
-        box-shadow: 0 8px 16px rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 16px rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+
+      #panel .secondary-button:focus {
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
       }
 
       .button-group {
@@ -169,8 +241,8 @@
       .panel-section {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
-        padding-bottom: 0.5rem;
+        gap: 1rem;
+        padding-bottom: 0.75rem;
       }
 
       .panel-heading {
@@ -182,22 +254,26 @@
       }
 
       #turn-indicator {
-        padding: 0.65rem 0.75rem;
+        padding: 0.75rem 0.85rem;
         border-radius: 0.6rem;
         background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(10px);
         font-weight: 600;
         letter-spacing: 0.01em;
-        transition: background 0.3s ease, transform 0.3s ease;
+        transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+        line-height: 1.4;
       }
 
       #turn-indicator.surge {
         background: rgba(31, 111, 235, 0.25);
         transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(31, 111, 235, 0.2);
       }
 
       .panel-summary-line {
         font-size: 0.9rem;
         color: rgba(229, 236, 255, 0.85);
+        line-height: 1.5;
       }
 
       .panel-summary-line.hidden {
@@ -208,18 +284,21 @@
         font-size: 0.8rem;
         color: rgba(229, 236, 255, 0.6);
         letter-spacing: 0.03em;
+        line-height: 1.5;
       }
 
       #board-feedback {
         margin-top: 1rem;
-        padding: 0.65rem 0.75rem;
+        padding: 0.75rem 0.85rem;
         border-radius: 0.6rem;
         background: rgba(215, 58, 73, 0.35);
+        backdrop-filter: blur(10px);
         color: #ffe1e4;
         font-size: 0.9rem;
+        line-height: 1.5;
         opacity: 0;
         transform: translateY(6px);
-        transition: opacity 0.25s ease, transform 0.25s ease;
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       #board-feedback.visible {
@@ -277,14 +356,23 @@
         border-radius: 0.4rem;
         border: 1px solid rgba(255, 255, 255, 0.25);
         background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(5px);
         font-size: 0.75rem;
         margin-right: 0.35rem;
+        font-weight: 500;
+        transition: background 0.2s ease, border-color 0.2s ease;
+      }
+
+      #hotkeys-panel li:hover kbd {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
       }
 
       .overlay {
         position: fixed;
         inset: 0;
         background: rgba(5, 8, 18, 0.78);
+        backdrop-filter: blur(8px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -302,13 +390,26 @@
         max-width: 520px;
         padding: 2.2rem;
         border-radius: 1.1rem;
-        background: rgba(19, 28, 50, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+        background: rgba(19, 28, 50, 0.95);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
         display: grid;
         gap: 1rem;
         color: #f5f7ff;
         text-align: left;
+        animation: overlayCardEnter 0.3s ease-out;
+      }
+
+      @keyframes overlayCardEnter {
+        from {
+          opacity: 0;
+          transform: scale(0.95) translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
       }
 
       .overlay-card h2 {
@@ -334,12 +435,22 @@
         color: #ffffff;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      }
+
+      .overlay-card button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3), 0 14px 28px rgba(31, 111, 235, 0.35);
       }
 
       .overlay-card button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 14px 28px rgba(31, 111, 235, 0.35);
+        box-shadow: 0 14px 28px rgba(31, 111, 235, 0.4);
+        background: #256feb;
+      }
+
+      .overlay-card button:active {
+        transform: translateY(0);
       }
 
       .story-card {
@@ -426,6 +537,21 @@
         background: transparent;
         border: 1px solid rgba(255, 255, 255, 0.25);
         color: rgba(255, 255, 255, 0.9);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+      }
+
+      .story-briefing-actions .secondary-button:focus,
+      .story-debrief-actions .secondary-button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+      }
+
+      .story-briefing-actions .secondary-button:hover,
+      .story-debrief-actions .secondary-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.3);
       }
 
       #story-city-list {
@@ -442,17 +568,24 @@
         border-radius: 0.65rem;
         border: 1px solid rgba(255, 255, 255, 0.1);
         background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(10px);
         color: inherit;
         text-align: left;
         cursor: pointer;
-        transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .story-city-button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(95, 187, 255, 0.2);
       }
 
       .story-city-button.active,
       .story-city-button:hover {
-        border-color: rgba(95, 187, 255, 0.35);
-        background: rgba(95, 187, 255, 0.1);
+        border-color: rgba(95, 187, 255, 0.4);
+        background: rgba(95, 187, 255, 0.12);
         transform: translateX(3px);
+        box-shadow: 0 4px 12px rgba(95, 187, 255, 0.15);
       }
 
       .story-city-button:disabled,
@@ -499,6 +632,7 @@
         background: radial-gradient(circle at 30% 35%, rgba(95, 187, 255, 0.25), transparent 60%),
           radial-gradient(circle at 70% 70%, rgba(255, 122, 197, 0.25), transparent 55%),
           rgba(10, 16, 32, 0.8);
+        backdrop-filter: blur(5px);
         min-height: 140px;
         display: flex;
         align-items: center;
@@ -508,6 +642,11 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
         overflow: hidden;
+        transition: border-color 0.2s ease;
+      }
+
+      #story-map:hover {
+        border-color: rgba(255, 255, 255, 0.12);
       }
 
       .story-map-canvas {
@@ -530,15 +669,23 @@
         border-radius: 0.75rem;
         border: 1px solid rgba(255, 255, 255, 0.12);
         background: rgba(8, 14, 26, 0.75);
+        backdrop-filter: blur(10px);
         color: inherit;
         text-align: left;
         cursor: pointer;
-        transition: border 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        transition: border 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      }
+
+      .neighborhood-card:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(95, 187, 255, 0.2);
       }
 
       .neighborhood-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 14px 28px rgba(31, 111, 235, 0.25);
+        transform: translateY(-3px);
+        box-shadow: 0 16px 32px rgba(31, 111, 235, 0.3);
+        background: rgba(8, 14, 26, 0.85);
+        border-color: rgba(255, 255, 255, 0.18);
       }
 
       .neighborhood-card.selected {
