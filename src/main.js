@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { generateBoard, ORIENTATION, GAME_STATUS, placeDomino, countAvailableMoves } from './game/board.js';
-import { buildBoardGroup, addDominoMesh } from './three/boardRenderer.js';
+import { buildBoardGroup, addDominoMesh, addTopEdgeGlow, addInactiveSpots } from './three/boardRenderer.js';
 import { createWinnerBanner, updateWinnerBanner, disposeWinnerBanner } from './three/winnerBanner.js';
 import {
   initializeCampaignProgress,
@@ -174,6 +174,7 @@ let regenerateTimeoutId = null;
 let feedbackTimeoutId = null;
 const dominoAnimations = [];
 const inactiveAnimations = [];
+const activeAnimations = [];
 let lastFairnessInfo = null;
 let storyState = null;
 let selectedStoryCityId = null;
@@ -411,7 +412,9 @@ function updateBoardGroup() {
   scene.add(boardGroup);
   dominoAnimations.length = 0;
   inactiveAnimations.length = 0;
+  activeAnimations.length = 0;
   queueInactiveWave(boardGroup, boardData);
+  queueActiveWave(boardGroup, boardData);
 }
 
 function updateStats() {
@@ -488,8 +491,11 @@ function handlePercentageChange(event) {
 function handleDefaultPercentage() {
   customInactivePercentage = null;
   percentageSlider.value = '17';
+  rowSlider.value = '10';
+  colSlider.value = '10';
   clearStoryMissionContext();
   updatePercentageDisplay();
+  updateDimensionDisplay();
   scheduleRegenerateBoard(true);
 }
 
@@ -776,6 +782,7 @@ function animate() {
   controls.update();
   const now = performance.now();
   updateInactiveAnimations(now);
+  updateActiveAnimations(now);
   updateDominoAnimations(now);
   renderer.render(scene, camera);
 }
@@ -857,6 +864,7 @@ function queueInactiveWave(group, board) {
     return;
   }
 
+  const CELL_HEIGHT = 0.2; // Match boardRenderer.js
   const waveTargets = group.userData?.inactiveWaveTargets ?? [];
   if (!waveTargets.length) {
     return;
@@ -868,8 +876,58 @@ function queueInactiveWave(group, board) {
 
   waveTargets.forEach((target) => {
     const distance = Math.hypot(target.row - midRow, target.col - midCol);
-    const delay = distance * 85;
+    const waveDelay = distance * 85;
+    const waveDuration = 420;
+    const transformDelay = waveDelay + waveDuration + 200; // Start transformation after wave completes + small delay
+    
+    // First phase: wave appearance (as white/active)
     inactiveAnimations.push({
+      mesh: target.mesh,
+      start: baseTime + waveDelay,
+      duration: waveDuration,
+      fromScale: target.initialScale ?? target.mesh.scale.y,
+      toScale: target.targetScale ?? 1,
+      phase: 'wave',
+      targetHeight: target.height,
+    });
+    
+    // Second phase: transform to inactive (black with purple glow)
+    inactiveAnimations.push({
+      mesh: target.mesh,
+      start: baseTime + transformDelay,
+      duration: 500,
+      fromScale: 1,
+      toScale: target.height / CELL_HEIGHT, // Scale to inactive height
+      phase: 'transform',
+      targetHeight: target.height,
+      usePark: target.usePark,
+      parkGeometries: target.parkGeometries,
+      buildingGeometries: target.buildingGeometries,
+      simpleInactive: group.userData?.simpleInactive ?? false,
+      row: target.row,
+      col: target.col,
+    });
+  });
+}
+
+function queueActiveWave(group, board) {
+  if (!group || !board) {
+    return;
+  }
+
+  const waveTargets = group.userData?.activeWaveTargets ?? [];
+  if (!waveTargets.length) {
+    return;
+  }
+
+  const midRow = (board.rows - 1) / 2;
+  const midCol = (board.cols - 1) / 2;
+  const baseTime = performance.now();
+
+  waveTargets.forEach((target) => {
+    const distance = Math.hypot(target.row - midRow, target.col - midCol);
+    const delay = distance * 85;
+    activeAnimations.push({
       mesh: target.mesh,
       start: baseTime + delay,
       duration: 420,
@@ -880,8 +938,79 @@ function queueInactiveWave(group, board) {
 }
 
 function updateInactiveAnimations(now) {
+  const CELL_HEIGHT = 0.2; // Match boardRenderer.js
+  
   for (let i = inactiveAnimations.length - 1; i >= 0; i -= 1) {
     const anim = inactiveAnimations[i];
+    if (now < anim.start) {
+      continue;
+    }
+    const progress = Math.min((now - anim.start) / anim.duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 2.2);
+    
+    if (anim.phase === 'wave') {
+      // First phase: wave appearance as white/active
+      const scale = anim.fromScale + (anim.toScale - anim.fromScale) * eased;
+      anim.mesh.scale.y = scale;
+      if (progress >= 1) {
+        anim.mesh.scale.y = anim.toScale;
+        inactiveAnimations.splice(i, 1);
+      }
+    } else if (anim.phase === 'transform') {
+      // Second phase: transform to inactive (dark purple)
+      const scale = anim.fromScale + (anim.toScale - anim.fromScale) * eased;
+      anim.mesh.scale.y = scale;
+      
+      // Interpolate material color from white to dark purple
+      const activeColor = 0xf0f4ff; // ACTIVE_COLOR
+      const inactiveColor = 0x2d1b4e; // SIMPLE_INACTIVE_MATERIAL color (dark purple)
+      const r1 = ((activeColor >> 16) & 0xff) / 255;
+      const g1 = ((activeColor >> 8) & 0xff) / 255;
+      const b1 = (activeColor & 0xff) / 255;
+      const r2 = ((inactiveColor >> 16) & 0xff) / 255;
+      const g2 = ((inactiveColor >> 8) & 0xff) / 255;
+      const b2 = (inactiveColor & 0xff) / 255;
+      
+      const r = r1 + (r2 - r1) * eased;
+      const g = g1 + (g2 - g1) * eased;
+      const b = b1 + (b2 - b1) * eased;
+      
+      if (anim.mesh.material) {
+        anim.mesh.material.color.setRGB(r, g, b);
+      }
+      
+      if (progress >= 1) {
+        // Animation complete - set final state
+        anim.mesh.scale.y = anim.toScale;
+        
+        // Replace material with inactive material
+        const inactiveMaterial = new THREE.MeshStandardMaterial({
+          color: 0x2d1b4e, // Dark purple - elegant contrast with active cells
+          roughness: 0.85,
+          metalness: 0.1,
+        });
+        if (anim.mesh.material) {
+          anim.mesh.material.dispose();
+        }
+        anim.mesh.material = inactiveMaterial;
+        
+        inactiveAnimations.splice(i, 1);
+      }
+    } else {
+      // Fallback for old animations without phase
+      const scale = anim.fromScale + (anim.toScale - anim.fromScale) * eased;
+      anim.mesh.scale.y = scale;
+      if (progress >= 1) {
+        anim.mesh.scale.y = anim.toScale;
+        inactiveAnimations.splice(i, 1);
+      }
+    }
+  }
+}
+
+function updateActiveAnimations(now) {
+  for (let i = activeAnimations.length - 1; i >= 0; i -= 1) {
+    const anim = activeAnimations[i];
     if (now < anim.start) {
       continue;
     }
@@ -891,7 +1020,7 @@ function updateInactiveAnimations(now) {
     anim.mesh.scale.y = scale;
     if (progress >= 1) {
       anim.mesh.scale.y = anim.toScale;
-      inactiveAnimations.splice(i, 1);
+      activeAnimations.splice(i, 1);
     }
   }
 }

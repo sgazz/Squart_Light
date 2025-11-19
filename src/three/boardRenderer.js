@@ -4,15 +4,19 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 const CELL_SIZE = 1;
 const CELL_HEIGHT = 0.2;
 const INACTIVE_HEIGHT_MULTIPLIER = 2.4;
-const ACTIVE_COLOR = 0xe6ebff;
-const BASE_TILE_COLOR = 0xff6b35;
+const ACTIVE_COLOR = 0xf0f4ff; // Brighter, more saturated light blue-white
+const BASE_TILE_COLOR = 0xff5722; // More vibrant orange-red
 const BASE_HEIGHT = 0.07;
 const BASE_EDGE_HEIGHT = 0.16;
 const BASE_EDGE_THICKNESS = 0.11;
-const HORIZONTAL_DOMINO_COLOR = 0x1f6feb;
-const VERTICAL_DOMINO_COLOR = 0xd73a49;
+const HORIZONTAL_DOMINO_COLOR = 0x0d6efd; // More vibrant, saturated blue
+const VERTICAL_DOMINO_COLOR = 0xdc3545; // More vibrant, saturated red
 
-const activeMaterial = new THREE.MeshStandardMaterial({ color: ACTIVE_COLOR });
+const activeMaterial = new THREE.MeshStandardMaterial({ 
+  color: ACTIVE_COLOR,
+  roughness: 0.3,
+  metalness: 0.1,
+});
 const parkBaseMaterial = new THREE.MeshStandardMaterial({
   color: 0x1a2b1f,
   roughness: 0.7,
@@ -88,7 +92,7 @@ const DOMINO_MATERIALS = {
 };
 
 const SIMPLE_INACTIVE_MATERIAL = new THREE.MeshStandardMaterial({
-  color: 0x111111,
+  color: 0x2d1b4e, // Dark purple - elegant contrast with active cells
   roughness: 0.85,
   metalness: 0.1,
 });
@@ -126,6 +130,7 @@ export function buildBoardGroup(board, options = {}) {
 
   const cellMeshes = [];
   const inactiveWaveTargets = [];
+  const activeWaveTargets = [];
 
   board.cells.forEach((rowCells, rowIndex) => {
     rowCells.forEach((cell, colIndex) => {
@@ -133,32 +138,48 @@ export function buildBoardGroup(board, options = {}) {
         return;
       }
       const isInactive = cell.isInactive;
-      const mesh = isInactive
-        ? createInactiveMesh({
-            row: cell.row,
-            col: cell.col,
-            usePark: !simpleInactive && shouldUsePark ? shouldUsePark(rowIndex, colIndex) : false,
-            parkGeometries,
-            buildingGeometries,
-            simpleInactive,
-          })
-        : new THREE.Mesh(activeGeometry, activeMaterial);
+      
+      // All cells start as active (white) meshes
+      const mesh = new THREE.Mesh(activeGeometry, activeMaterial.clone());
       mesh.position.set(colIndex * CELL_SIZE - xOffset, 0, rowIndex * CELL_SIZE - zOffset);
-      mesh.userData = { ...mesh.userData, row: cell.row, col: cell.col, isInactive: cell.isInactive };
+      mesh.userData = { 
+        ...mesh.userData, 
+        row: cell.row, 
+        col: cell.col, 
+        isInactive: cell.isInactive,
+        willBecomeInactive: isInactive,
+        simpleInactive: simpleInactive,
+      };
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      
+      // All cells start with wave animation
+      const initialScale = 0.05;
+      const targetScale = 1;
+      mesh.scale.y = initialScale;
+      
       if (isInactive) {
-        const inactiveCore = mesh.userData?.inactiveCore ?? mesh;
-        const initialScale = 0.05;
-        const targetScale = 1;
-        inactiveCore.scale.y = initialScale;
+        // Inactive cells will transform after wave animation
         inactiveWaveTargets.push({
-          mesh: inactiveCore,
+          mesh: mesh,
           row: cell.row,
           col: cell.col,
           initialScale,
           targetScale,
           height: inactiveHeight,
+          usePark: !simpleInactive && shouldUsePark ? shouldUsePark(rowIndex, colIndex) : false,
+          parkGeometries,
+          buildingGeometries,
+        });
+      } else {
+        // Active cells stay active
+        activeWaveTargets.push({
+          mesh: mesh,
+          row: cell.row,
+          col: cell.col,
+          initialScale,
+          targetScale,
+          height: CELL_HEIGHT,
         });
       }
       cellMeshes.push(mesh);
@@ -181,6 +202,11 @@ export function buildBoardGroup(board, options = {}) {
       maxCellHeight: Math.max(CELL_HEIGHT, inactiveHeight),
     },
     inactiveWaveTargets,
+    activeWaveTargets,
+    simpleInactive,
+    parkGeometries,
+    buildingGeometries,
+    shouldUsePark,
   };
 
   return group;
@@ -394,18 +420,19 @@ function createBuildingMesh({ geometries, materials, row, col }) {
 }
 
 function createDominoMaterials(color, label) {
-  const bumpMap = createDominoBumpTexture(label);
   const sideMaterial = new THREE.MeshStandardMaterial({
     color,
-    metalness: 0.2,
-    roughness: 0.45,
+    metalness: 0.35,
+    roughness: 0.3,
+    emissive: color,
+    emissiveIntensity: 0.15, // Subtle glow for better contrast
   });
   const topMaterial = new THREE.MeshStandardMaterial({
     color,
-    metalness: 0.2,
-    roughness: 0.4,
-    bumpMap,
-    bumpScale: 1,
+    metalness: 0.35,
+    roughness: 0.25,
+    emissive: color,
+    emissiveIntensity: 0.15,
   });
 
   return [
@@ -462,8 +489,10 @@ function buildBaseGroup(board, xOffset, zOffset) {
 
   const tileMaterial = new THREE.MeshStandardMaterial({
     color: BASE_TILE_COLOR,
-    roughness: 0.65,
-    metalness: 0.08,
+    roughness: 0.4,
+    metalness: 0.2,
+    emissive: BASE_TILE_COLOR,
+    emissiveIntensity: 0.1, // Subtle glow for better contrast
   });
   const horizontalEdgeMaterial = new THREE.MeshStandardMaterial({
     color: 0xffd76a,
@@ -722,7 +751,7 @@ function hashString(value) {
   return hash;
 }
 
-function addTopEdgeGlow(parentMesh, topY, cellSize) {
+export function addTopEdgeGlow(parentMesh, topY, cellSize) {
   const glowWidth = cellSize * 0.95;
   const glowOffset = 0.01;
   const edgeThickness = 0.03;
@@ -756,4 +785,77 @@ function addTopEdgeGlow(parentMesh, topY, cellSize) {
   westMesh.position.set(0, topY + glowOffset, -glowWidth / 2);
   westMesh.renderOrder = 10;
   parentMesh.add(westMesh);
+}
+
+export function addInactiveSpots(parentMesh, topY, cellSize, row, col) {
+  // Create a simple seeded random function based on row and col
+  const seed = (row * 73856093) ^ (col * 19349663);
+  const random = () => {
+    const x = Math.sin(seed + 1) * 10000;
+    return x - Math.floor(x);
+  };
+  
+  // Generate multiple random values
+  const r1 = random();
+  const r2 = random();
+  const r3 = random();
+  const r4 = random();
+  const r5 = random();
+  
+  const spotOffset = 0.005; // Slightly above the surface
+  const spotHeight = 0.01;
+  const cellWidth = cellSize * 0.95;
+  const minSpotSize = 0.08;
+  const maxSpotSize = 0.18;
+  
+  // Spot colors - mix of grays and colorful accents
+  const spotColors = [
+    0x555555, // Light gray
+    0x666666, // Lighter gray
+    0x777777, // Even lighter gray
+    0xffd700, // Yellow (gold)
+    0x32cd32, // Lime green
+    0x9370db, // Medium purple
+    0xffa500, // Orange-yellow
+    0x00ff7f, // Spring green
+    0xba55d3, // Medium orchid (purple)
+    0x5a5a5a, // Medium-light gray
+    0x6a6a6a, // Light gray
+  ];
+  
+  // Create 3-5 spots per cell
+  const numSpots = 3 + Math.floor(r1 * 3); // 3-5 spots
+  
+  for (let i = 0; i < numSpots; i += 1) {
+    const rX = i === 0 ? r1 : (r1 * (i + 1) + r2) % 1;
+    const rZ = i === 0 ? r2 : (r2 * (i + 1) + r3) % 1;
+    const rSize = i === 0 ? r3 : (r3 * (i + 1) + r4) % 1;
+    const rColor = i === 0 ? r4 : (r4 * (i + 1) + r5) % 1;
+    const rIsSquare = (rX + rZ) % 1 < 0.5; // 50% chance of square vs rectangle
+    
+    // Position within cell bounds (avoid edges)
+    const margin = 0.15;
+    const x = (rX * (1 - 2 * margin) - 0.5 + margin) * cellWidth;
+    const z = (rZ * (1 - 2 * margin) - 0.5 + margin) * cellWidth;
+    
+    // Size
+    const spotSize = minSpotSize + rSize * (maxSpotSize - minSpotSize);
+    const width = spotSize;
+    const depth = rIsSquare ? spotSize : spotSize * (0.6 + rSize * 0.4); // Rectangles are 60-100% of width
+    
+    // Create geometry
+    const spotGeometry = new RoundedBoxGeometry(width, spotHeight, depth, 2, 0.005);
+    const spotMaterial = new THREE.MeshStandardMaterial({
+      color: spotColors[Math.floor(rColor * spotColors.length)],
+      roughness: 0.5,
+      metalness: 0.25,
+      emissive: spotColors[Math.floor(rColor * spotColors.length)],
+      emissiveIntensity: 0.1, // Subtle glow for better contrast
+    });
+    
+    const spotMesh = new THREE.Mesh(spotGeometry, spotMaterial);
+    spotMesh.position.set(x, topY + spotOffset, z);
+    spotMesh.renderOrder = 9; // Just below glow
+    parentMesh.add(spotMesh);
+  }
 }
