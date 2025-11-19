@@ -25,7 +25,6 @@ const percentageValue = document.getElementById('inactive-percentage-value');
 const regenerateButton = document.getElementById('regenerate-btn');
 const defaultPercentageButton = document.getElementById('default-percentage-btn');
 const guideButton = document.getElementById('guide-btn');
-const randomOrientationButton = document.getElementById('random-orientation-btn');
 const turnIndicator = document.getElementById('turn-indicator');
 const panelBoardSummary = document.getElementById('panel-board-summary');
 const panelStorySummary = document.getElementById('panel-story-summary');
@@ -58,6 +57,21 @@ const storyDebriefSubtitle = document.getElementById('story-debrief-subtitle');
 const storyDebriefSummary = document.getElementById('story-debrief-summary');
 const storyDebriefNext = document.getElementById('story-debrief-next');
 const storyDebriefContinue = document.getElementById('story-debrief-continue');
+const pvpButton = document.getElementById('pvp-btn');
+const pvpModeOverlay = document.getElementById('pvp-mode-overlay');
+const pvpModeTitle = document.getElementById('pvp-mode-title');
+const pvpModeDescription = document.getElementById('pvp-mode-description');
+const pvpStartingPlayer = document.getElementById('pvp-starting-player');
+const pvpModeStart = document.getElementById('pvp-mode-start');
+const pvpModeCancel = document.getElementById('pvp-mode-cancel');
+const aivpButton = document.getElementById('aivp-btn');
+const aiModeOverlay = document.getElementById('ai-mode-overlay');
+const aiModeTitle = document.getElementById('ai-mode-title');
+const aiModeDescription = document.getElementById('ai-mode-description');
+const aiPlayerSide = document.getElementById('ai-player-side');
+const aiTurnOrder = document.getElementById('ai-turn-order');
+const aiModeStart = document.getElementById('ai-mode-start');
+const aiModeCancel = document.getElementById('ai-mode-cancel');
 
 const ORIENTATION_LABELS = {
   [ORIENTATION.HORIZONTAL]: 'Horizontal (Blue)',
@@ -159,6 +173,7 @@ let storyMissionConfig = null;
 let pendingStoryMission = null;
 let storyDebriefVisible = false;
 let randomOrientationChoice = null;
+let aiModeConfig = null;
 
 function init() {
   initDimensionSliders();
@@ -172,9 +187,6 @@ function init() {
   rowSlider.addEventListener('input', handleDimensionChange);
   colSlider.addEventListener('input', handleDimensionChange);
   document.addEventListener('keydown', handleShortcutKeys);
-  if (randomOrientationButton) {
-    randomOrientationButton.addEventListener('click', handleRandomOrientation);
-  }
   if (guideButton) {
     guideButton.addEventListener('click', showGuideOverlay);
   }
@@ -227,6 +239,38 @@ function init() {
         hideOnboarding(true);
       }
     });
+  }
+  if (pvpButton) {
+    pvpButton.addEventListener('click', showPvpModeConfig);
+  }
+  if (pvpModeOverlay) {
+    pvpModeOverlay.addEventListener('click', (event) => {
+      if (event.target === pvpModeOverlay) {
+        hidePvpModeConfig();
+      }
+    });
+  }
+  if (pvpModeStart) {
+    pvpModeStart.addEventListener('click', startPvpModeGame);
+  }
+  if (pvpModeCancel) {
+    pvpModeCancel.addEventListener('click', hidePvpModeConfig);
+  }
+  if (aivpButton) {
+    aivpButton.addEventListener('click', () => showAiModeConfig('aivp'));
+  }
+  if (aiModeOverlay) {
+    aiModeOverlay.addEventListener('click', (event) => {
+      if (event.target === aiModeOverlay) {
+        hideAiModeConfig();
+      }
+    });
+  }
+  if (aiModeStart) {
+    aiModeStart.addEventListener('click', startAiModeGame);
+  }
+  if (aiModeCancel) {
+    aiModeCancel.addEventListener('click', hideAiModeConfig);
   }
   showOnboardingIfNeeded();
   updatePercentageDisplay();
@@ -544,6 +588,17 @@ function updateTurnIndicator() {
     return;
   }
 
+  if (boardData.aiMode?.enabled) {
+    const isPlayerTurn =
+      boardData.currentPlayer === boardData.aiMode.playerOrientation;
+    const currentLabel = isPlayerTurn
+      ? ORIENTATION_LABELS[boardData.aiMode.playerOrientation]
+      : 'AI';
+    turnIndicator.textContent = `${currentLabel} to move`;
+    pulseTurnIndicator();
+    return;
+  }
+
   const label =
     boardData.currentPlayer === ORIENTATION.HORIZONTAL
       ? ORIENTATION_LABELS[ORIENTATION.HORIZONTAL]
@@ -796,6 +851,8 @@ function handleShortcutKeys(event) {
       cancelStoryBriefing(false);
       hideStoryDebrief(false);
       hideStoryOverlay();
+      hidePvpModeConfig();
+      hideAiModeConfig();
       break;
     default:
       break;
@@ -1682,4 +1739,121 @@ function createBackgroundTexture() {
     texture.colorSpace = THREE.SRGBColorSpace;
   }
   return texture;
+}
+
+function showPvpModeConfig() {
+  if (!pvpModeOverlay || !pvpModeTitle || !pvpModeDescription) {
+    return;
+  }
+
+  pvpModeTitle.textContent = 'Configure PvP Game';
+  pvpModeDescription.textContent = 'Choose starting player';
+  if (pvpStartingPlayer) {
+    pvpStartingPlayer.value = 'random';
+  }
+
+  pvpModeOverlay.classList.remove('hidden');
+}
+
+function hidePvpModeConfig() {
+  if (!pvpModeOverlay) {
+    return;
+  }
+  pvpModeOverlay.classList.add('hidden');
+}
+
+function startPvpModeGame() {
+  if (!pvpStartingPlayer || !boardData) {
+    return;
+  }
+
+  const startingPlayer = pvpStartingPlayer.value;
+
+  if (boardData.status !== GAME_STATUS.ACTIVE) {
+    boardData.status = GAME_STATUS.ACTIVE;
+    boardData.winner = null;
+  }
+
+  if (startingPlayer === 'random') {
+    const orientation =
+      Math.random() < 0.5 ? ORIENTATION.HORIZONTAL : ORIENTATION.VERTICAL;
+    const player = Math.random() < 0.5 ? 'P1' : 'P2';
+    randomOrientationChoice = { orientation, player };
+    boardData.currentPlayer = orientation;
+    boardData.startingPlayerLabel = player;
+  } else {
+    const orientation =
+      startingPlayer === 'horizontal' ? ORIENTATION.HORIZONTAL : ORIENTATION.VERTICAL;
+    boardData.currentPlayer = orientation;
+    delete boardData.startingPlayerLabel;
+  }
+
+  if (boardData.aiMode) {
+    delete boardData.aiMode;
+  }
+
+  updateTurnIndicator();
+  hidePvpModeConfig();
+  showFeedback('PvP game started.', 'success', 1500);
+}
+
+function showAiModeConfig(mode) {
+  if (!aiModeOverlay || !aiModeTitle || !aiModeDescription) {
+    return;
+  }
+
+  aiModeConfig = { mode };
+
+  aiModeTitle.textContent = 'Play vs AI';
+  aiModeDescription.textContent = 'Choose your side and turn order.';
+  if (aiTurnOrder) {
+    aiTurnOrder.value = 'first';
+  }
+
+  aiModeOverlay.classList.remove('hidden');
+}
+
+function hideAiModeConfig() {
+  if (!aiModeOverlay) {
+    return;
+  }
+  aiModeOverlay.classList.add('hidden');
+  aiModeConfig = null;
+}
+
+function startAiModeGame() {
+  if (!aiModeConfig || !aiPlayerSide || !aiTurnOrder || !boardData) {
+    return;
+  }
+
+  const playerSide = aiPlayerSide.value;
+  const turnOrder = aiTurnOrder.value;
+
+  const playerOrientation =
+    playerSide === 'horizontal' ? ORIENTATION.HORIZONTAL : ORIENTATION.VERTICAL;
+  const aiOrientation =
+    playerSide === 'horizontal' ? ORIENTATION.VERTICAL : ORIENTATION.HORIZONTAL;
+
+  const startingOrientation = turnOrder === 'first' ? playerOrientation : aiOrientation;
+
+  if (boardData.status !== GAME_STATUS.ACTIVE) {
+    boardData.status = GAME_STATUS.ACTIVE;
+    boardData.winner = null;
+  }
+
+  boardData.currentPlayer = startingOrientation;
+  boardData.aiMode = {
+    enabled: true,
+    playerOrientation,
+    aiOrientation,
+    playerStarts: turnOrder === 'first',
+  };
+
+  updateTurnIndicator();
+  hideAiModeConfig();
+  showFeedback(
+    `AI Mode: You play as ${ORIENTATION_LABELS[playerOrientation]}, ${turnOrder === 'first' ? 'you start' : 'AI starts'}.`,
+    'info',
+    2000
+  );
 }

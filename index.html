@@ -9,22 +9,30 @@
         color-scheme: dark;
         font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         scroll-behavior: smooth;
+        --header-height: calc(1.25rem * 2 + 1.25rem * 1.4);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        height: 100%;
+        overflow: hidden;
+      }
+
       body {
         margin: 0;
+        padding: 0;
+        height: 100%;
         display: flex;
         flex-direction: column;
-        min-height: 100vh;
         background: #050505;
         color: #f5f5f5;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        overflow: hidden;
       }
 
       header {
@@ -32,6 +40,8 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         backdrop-filter: blur(10px);
         background: rgba(5, 5, 5, 0.7);
+        position: relative;
+        z-index: 200;
       }
 
       h1 {
@@ -44,13 +54,18 @@
 
       #app {
         flex: 1;
-        display: grid;
-        grid-template-columns: 320px 1fr;
-        gap: 0;
         min-height: 0;
+        overflow: hidden;
+        height: 100%;
+        padding-left: 320px;
       }
 
       #panel {
+        position: fixed;
+        left: 0;
+        top: var(--header-height);
+        width: 320px;
+        height: calc(100vh - var(--header-height));
         padding: 1.5rem;
         background: rgba(255, 255, 255, 0.03);
         backdrop-filter: blur(20px);
@@ -59,6 +74,8 @@
         flex-direction: column;
         gap: 1.25rem;
         overflow-y: auto;
+        overflow-x: hidden;
+        z-index: 100;
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
       }
@@ -258,8 +275,10 @@
         border-radius: 0.6rem;
         background: rgba(255, 255, 255, 0.08);
         backdrop-filter: blur(10px);
+        font-size: 0.85rem;
         font-weight: 600;
         letter-spacing: 0.01em;
+        text-align: center;
         transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
         line-height: 1.4;
       }
@@ -554,6 +573,66 @@
         border-color: rgba(255, 255, 255, 0.3);
       }
 
+      .ai-mode-form {
+        display: grid;
+        gap: 1.25rem;
+        margin: 1rem 0;
+      }
+
+      .ai-mode-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .panel-select {
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.6rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.35);
+        color: inherit;
+        font-size: 0.95rem;
+        transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+      }
+
+      .panel-select:focus {
+        outline: none;
+        border-color: rgba(79, 125, 255, 0.5);
+        background: rgba(0, 0, 0, 0.45);
+        box-shadow: 0 0 0 3px rgba(79, 125, 255, 0.1);
+      }
+
+      .panel-select:hover:not(:focus) {
+        border-color: rgba(255, 255, 255, 0.15);
+        background: rgba(0, 0, 0, 0.4);
+      }
+
+      .ai-mode-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+      }
+
+      .ai-mode-actions .secondary-button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: rgba(255, 255, 255, 0.9);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+      }
+
+      .ai-mode-actions .secondary-button:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+      }
+
+      .ai-mode-actions .secondary-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+
       #story-city-list {
         display: flex;
         flex-direction: column;
@@ -804,15 +883,19 @@
 
       @media (max-width: 960px) {
         #app {
-          grid-template-columns: 1fr;
+          padding-left: 0;
         }
 
         #panel {
-          order: 2;
+          width: 100%;
+          height: auto;
+          max-height: 50vh;
+          position: relative;
+          top: auto;
+          left: auto;
         }
 
         #canvas-wrapper {
-          order: 1;
           min-height: 50vh;
         }
       }
@@ -825,7 +908,36 @@
     <div id="app">
       <aside id="panel">
         <section class="panel-section">
-          <h2 class="panel-heading">Board Setup</h2>
+          <h2 class="panel-heading">AI Mode</h2>
+          <button
+            id="aivp-btn"
+            type="button"
+            class="wide-button"
+            title="Play against AI - Configure your game"
+          >
+            Play vs AI
+          </button>
+        </section>
+        <section class="panel-section">
+          <h2 class="panel-heading">PvP Mode</h2>
+          <button
+            id="pvp-btn"
+            type="button"
+            class="wide-button"
+            title="Play Player vs Player - Configure your game"
+          >
+            Play PvP
+          </button>
+          <h2 class="panel-heading">Story Mode</h2>
+          <button id="story-btn" type="button" class="wide-button">Story Mode</button>
+          <div id="panel-story-summary" class="panel-summary-line hidden"></div>
+          <div class="button-group">
+            <button id="regenerate-btn" type="button" class="wide-button">Regenerate Board</button>
+          </div>
+          <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
+        </section>
+        <section class="panel-section">
+          <h2 class="panel-heading">Custom Board Setup</h2>
           <div class="slider-field" title="Adjust the number of rows (vertical size) for the board.">
             <label class="panel-label" for="board-rows">Rows</label>
             <div class="slider-control">
@@ -850,42 +962,21 @@
               <span id="inactive-percentage-value" class="slider-value">17%</span>
             </div>
           </label>
+        </section>
+        <section class="panel-section">
+          <label class="panel-label" title="Enter a value to reproduce the same inactive-square layout.">
+            Seed
+            <input id="seed-input" type="text" placeholder="Random" />
+          </label>
+        </section>
+        <section class="panel-section">
           <button id="default-percentage-btn" type="button" class="wide-button default-game-button">
             Default game
           </button>
-          <label class="panel-label" title="Enter a value to reproduce the same inactive-square layout.">
-            Seed (optional)
-            <input id="seed-input" type="text" placeholder="Random" />
-          </label>
-          <div class="button-group">
-            <button id="regenerate-btn" type="button" class="wide-button">Regenerate Board</button>
-            <button id="random-orientation-btn" type="button" class="wide-button secondary-button">
-              Randomize Start
-            </button>
-          </div>
-        </section>
-        <section class="panel-section">
-          <h2 class="panel-heading">Current Status</h2>
-          <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
-          <div id="panel-board-summary" class="panel-summary-line">Board —</div>
-          <div id="panel-story-summary" class="panel-summary-line hidden"></div>
-          <div id="panel-balance-summary" class="panel-summary-sub"></div>
-        </section>
-        <section class="panel-section">
-          <h2 class="panel-heading">Shortcuts</h2>
-          <div id="hotkeys-panel">
-            <ul>
-              <li><kbd>H</kbd> highlight horizontal player</li>
-              <li><kbd>V</kbd> highlight vertical player</li>
-              <li><kbd>R</kbd> regenerate board</li>
-              <li><kbd>G</kbd> toggle game guide</li>
-            </ul>
-          </div>
         </section>
         <div id="board-feedback" role="status" aria-live="polite"></div>
         <div id="panel-footer">
-          <button id="story-btn" type="button">Story Mode</button>
-          <button id="guide-btn" type="button" class="secondary-button">Game Guide</button>
+          <button id="guide-btn" type="button" class="wide-button secondary-button">Game Guide</button>
         </div>
       </aside>
       <div id="canvas-wrapper">
@@ -992,6 +1083,52 @@
         <p id="story-debrief-next" class="story-debrief-meta"></p>
         <div class="story-debrief-actions">
           <button id="story-debrief-continue" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+    <div id="pvp-mode-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card">
+        <h2 id="pvp-mode-title">Configure PvP Game</h2>
+        <p id="pvp-mode-description">Choose starting player</p>
+        <div class="ai-mode-form">
+          <div class="ai-mode-field">
+            <label class="panel-label" for="pvp-starting-player">Starting Player</label>
+            <select id="pvp-starting-player" class="panel-select">
+              <option value="horizontal">Horizontal (Blue)</option>
+              <option value="vertical">Vertical (Red)</option>
+              <option value="random">Random</option>
+            </select>
+          </div>
+        </div>
+        <div class="ai-mode-actions">
+          <button id="pvp-mode-start" type="button">Start Game</button>
+          <button id="pvp-mode-cancel" type="button" class="secondary-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="ai-mode-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card">
+        <h2 id="ai-mode-title">Configure AI Game</h2>
+        <p id="ai-mode-description">Choose your side and turn order</p>
+        <div class="ai-mode-form">
+          <div class="ai-mode-field">
+            <label class="panel-label" for="ai-player-side">Your Side</label>
+            <select id="ai-player-side" class="panel-select">
+              <option value="horizontal">Horizontal (Blue)</option>
+              <option value="vertical">Vertical (Red)</option>
+            </select>
+          </div>
+          <div class="ai-mode-field">
+            <label class="panel-label" for="ai-turn-order">Turn Order</label>
+            <select id="ai-turn-order" class="panel-select">
+              <option value="first">You play first</option>
+              <option value="second">AI plays first</option>
+            </select>
+          </div>
+        </div>
+        <div class="ai-mode-actions">
+          <button id="ai-mode-start" type="button">Start Game</button>
+          <button id="ai-mode-cancel" type="button" class="secondary-button">Cancel</button>
         </div>
       </div>
     </div>
