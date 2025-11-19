@@ -22,7 +22,6 @@ const colValue = document.getElementById('board-cols-value');
 const seedInput = document.getElementById('seed-input');
 const percentageSlider = document.getElementById('inactive-percentage');
 const percentageValue = document.getElementById('inactive-percentage-value');
-const regenerateButton = document.getElementById('regenerate-btn');
 const defaultPercentageButton = document.getElementById('default-percentage-btn');
 const guideButton = document.getElementById('guide-btn');
 const turnIndicator = document.getElementById('turn-indicator');
@@ -62,8 +61,18 @@ const pvpModeOverlay = document.getElementById('pvp-mode-overlay');
 const pvpModeTitle = document.getElementById('pvp-mode-title');
 const pvpModeDescription = document.getElementById('pvp-mode-description');
 const pvpStartingPlayer = document.getElementById('pvp-starting-player');
+const pvpTimerEnabled = document.getElementById('pvp-timer-enabled');
+const pvpTimerOptions = document.getElementById('pvp-timer-options');
+const pvpTimerDurationField = document.getElementById('pvp-timer-duration-field');
+const pvpTimerType = document.getElementById('pvp-timer-type');
+const pvpTimerDuration = document.getElementById('pvp-timer-duration');
 const pvpModeStart = document.getElementById('pvp-mode-start');
 const pvpModeCancel = document.getElementById('pvp-mode-cancel');
+const timerDisplay = document.getElementById('timer-display');
+const timerHorizontal = document.getElementById('timer-horizontal');
+const timerVertical = document.getElementById('timer-vertical');
+const timerHTime = document.getElementById('timer-h-time');
+const timerVTime = document.getElementById('timer-v-time');
 const aivpButton = document.getElementById('aivp-btn');
 const aiModeOverlay = document.getElementById('ai-mode-overlay');
 const aiModeTitle = document.getElementById('ai-mode-title');
@@ -174,6 +183,7 @@ let pendingStoryMission = null;
 let storyDebriefVisible = false;
 let randomOrientationChoice = null;
 let aiModeConfig = null;
+let timerIntervalId = null;
 
 function init() {
   initDimensionSliders();
@@ -181,7 +191,6 @@ function init() {
   regenerateBoard();
   window.addEventListener('resize', handleResize);
   renderer.domElement.addEventListener('pointerdown', handlePointerDown);
-  regenerateButton.addEventListener('click', () => scheduleRegenerateBoard(true));
   percentageSlider.addEventListener('input', handlePercentageChange);
   defaultPercentageButton.addEventListener('click', handleDefaultPercentage);
   rowSlider.addEventListener('input', handleDimensionChange);
@@ -306,6 +315,11 @@ function initDimensionSliders() {
 
 function regenerateBoard() {
   clearWinnerBanner();
+  
+  // Save timer state before regenerating
+  const savedTimer = boardData?.timer ? { ...boardData.timer } : null;
+  stopTimer();
+  
   const rows = Number(rowSlider.value);
   const cols = Number(colSlider.value);
   const seedValue = seedInput.value.trim();
@@ -320,6 +334,17 @@ function regenerateBoard() {
   });
 
   boardData = board;
+  
+  // Restore timer state if it existed
+  if (boardData && savedTimer?.enabled) {
+    boardData.timer = { ...savedTimer };
+    // Reset times if per-turn mode
+    if (boardData.timer.type === 'per-turn') {
+      boardData.timer.horizontalTime = boardData.timer.duration;
+      boardData.timer.verticalTime = boardData.timer.duration;
+    }
+    startTimer();
+  }
   if (storyMissionConfig) {
     boardData.storyMission = { ...storyMissionConfig };
   } else if (boardData.storyMission) {
@@ -575,17 +600,44 @@ function updateTurnIndicator() {
     return;
   }
 
+  // Remove all color classes
+  turnIndicator.classList.remove('horizontal', 'vertical', 'ai', 'surge');
+
   if (!boardData) {
     turnIndicator.textContent = 'Preparing board...';
-    turnIndicator.classList.remove('surge');
+    if (timerDisplay) {
+      timerDisplay.classList.add('hidden');
+    }
+    stopTimer();
     return;
   }
 
   if (boardData.status === GAME_STATUS.FINISHED) {
     const winnerLabel = boardData.winner ? `${ORIENTATION_LABELS[boardData.winner]} wins` : 'Draw';
     turnIndicator.textContent = winnerLabel;
-    turnIndicator.classList.remove('surge');
+    if (boardData.winner === ORIENTATION.HORIZONTAL) {
+      turnIndicator.classList.add('horizontal');
+    } else if (boardData.winner === ORIENTATION.VERTICAL) {
+      turnIndicator.classList.add('vertical');
+    }
+    stopTimer();
     return;
+  }
+  
+  // Update timer display and restart timer when turn changes
+  if (boardData.timer?.enabled) {
+    // In per-turn mode, initialize time for player if it's their first turn
+    if (boardData.timer.type === 'per-turn') {
+      const currentOrientation = boardData.currentPlayer;
+      if (currentOrientation === ORIENTATION.HORIZONTAL && boardData.timer.horizontalTime === undefined) {
+        boardData.timer.horizontalTime = boardData.timer.duration;
+      } else if (currentOrientation === ORIENTATION.VERTICAL && boardData.timer.verticalTime === undefined) {
+        boardData.timer.verticalTime = boardData.timer.duration;
+      }
+    }
+    updateTimerDisplay();
+    // Restart timer for the new player
+    startTimer();
   }
 
   if (boardData.aiMode?.enabled) {
@@ -595,6 +647,15 @@ function updateTurnIndicator() {
       ? ORIENTATION_LABELS[boardData.aiMode.playerOrientation]
       : 'AI';
     turnIndicator.textContent = `${currentLabel} to move`;
+    if (isPlayerTurn) {
+      if (boardData.aiMode.playerOrientation === ORIENTATION.HORIZONTAL) {
+        turnIndicator.classList.add('horizontal');
+      } else {
+        turnIndicator.classList.add('vertical');
+      }
+    } else {
+      turnIndicator.classList.add('ai');
+    }
     pulseTurnIndicator();
     return;
   }
@@ -609,6 +670,13 @@ function updateTurnIndicator() {
       ? ` — ${boardData.startingPlayerLabel}`
       : '';
   turnIndicator.textContent = `${label} to move${starterSuffix}`;
+  
+  if (boardData.currentPlayer === ORIENTATION.HORIZONTAL) {
+    turnIndicator.classList.add('horizontal');
+  } else {
+    turnIndicator.classList.add('vertical');
+  }
+  
   pulseTurnIndicator();
 }
 
@@ -687,6 +755,12 @@ function tryPlaceDomino(row, col) {
   if (mesh) {
     queueDominoAnimation(mesh);
   }
+  
+  // Stop timer when domino is placed - it will restart when turn changes
+  if (boardData.timer?.enabled) {
+    stopTimer();
+  }
+  
   updateTurnIndicator();
   updateStats();
   updateRemainingMoves();
@@ -1747,9 +1821,19 @@ function showPvpModeConfig() {
   }
 
   pvpModeTitle.textContent = 'Configure PvP Game';
-  pvpModeDescription.textContent = 'Choose starting player';
+  pvpModeDescription.textContent = 'Choose starting player and game options';
   if (pvpStartingPlayer) {
     pvpStartingPlayer.value = 'random';
+  }
+  if (pvpTimerEnabled) {
+    pvpTimerEnabled.checked = false;
+    handleTimerEnabledChange();
+  }
+  if (pvpTimerDuration) {
+    pvpTimerDuration.value = '60';
+  }
+  if (pvpTimerType) {
+    pvpTimerType.value = 'per-turn';
   }
 
   pvpModeOverlay.classList.remove('hidden');
@@ -1762,12 +1846,28 @@ function hidePvpModeConfig() {
   pvpModeOverlay.classList.add('hidden');
 }
 
+function handleTimerEnabledChange() {
+  if (!pvpTimerEnabled || !pvpTimerOptions || !pvpTimerDurationField) {
+    return;
+  }
+  const enabled = pvpTimerEnabled.checked;
+  if (pvpTimerOptions) {
+    pvpTimerOptions.style.display = enabled ? 'block' : 'none';
+  }
+  if (pvpTimerDurationField) {
+    pvpTimerDurationField.style.display = enabled ? 'block' : 'none';
+  }
+}
+
 function startPvpModeGame() {
   if (!pvpStartingPlayer || !boardData) {
     return;
   }
 
   const startingPlayer = pvpStartingPlayer.value;
+  const timerEnabled = pvpTimerEnabled?.checked ?? false;
+  const timerType = pvpTimerType?.value ?? 'per-turn';
+  const timerDuration = Number(pvpTimerDuration?.value ?? 60);
 
   if (boardData.status !== GAME_STATUS.ACTIVE) {
     boardData.status = GAME_STATUS.ACTIVE;
@@ -1792,9 +1892,143 @@ function startPvpModeGame() {
     delete boardData.aiMode;
   }
 
+  // Initialize timer if enabled
+  if (timerEnabled) {
+    boardData.timer = {
+      enabled: true,
+      type: timerType,
+      duration: timerDuration,
+      // In per-turn mode, initialize time only when player's turn comes
+      // In total mode, both players start with full duration
+      horizontalTime: timerType === 'total' ? timerDuration : undefined,
+      verticalTime: timerType === 'total' ? timerDuration : undefined,
+    };
+    startTimer();
+  } else {
+    if (boardData.timer) {
+      stopTimer();
+      delete boardData.timer;
+    }
+    if (timerDisplay) {
+      timerDisplay.classList.add('hidden');
+    }
+  }
+
   updateTurnIndicator();
+  
   hidePvpModeConfig();
   showFeedback('PvP game started.', 'success', 1500);
+}
+
+function startTimer() {
+  if (!boardData?.timer?.enabled || !timerDisplay) {
+    return;
+  }
+
+  timerDisplay.classList.remove('hidden');
+  updateTimerDisplay();
+
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+  }
+
+  timerIntervalId = setInterval(() => {
+    if (!boardData?.timer) {
+      stopTimer();
+      return;
+    }
+
+    const currentOrientation = boardData.currentPlayer;
+    if (!currentOrientation) {
+      return;
+    }
+    
+    if (currentOrientation === ORIENTATION.HORIZONTAL) {
+      if (boardData.timer.horizontalTime !== undefined && boardData.timer.horizontalTime > 0) {
+        boardData.timer.horizontalTime -= 1;
+        if (boardData.timer.horizontalTime <= 0) {
+          handleTimerExpired(ORIENTATION.HORIZONTAL);
+          return;
+        }
+      }
+    } else if (currentOrientation === ORIENTATION.VERTICAL) {
+      if (boardData.timer.verticalTime !== undefined && boardData.timer.verticalTime > 0) {
+        boardData.timer.verticalTime -= 1;
+        if (boardData.timer.verticalTime <= 0) {
+          handleTimerExpired(ORIENTATION.VERTICAL);
+          return;
+        }
+      }
+    }
+
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+  // Don't hide timer display - keep it visible to show remaining times
+}
+
+function updateTimerDisplay() {
+  if (!boardData?.timer || !timerHTime || !timerVTime || !timerHorizontal || !timerVertical) {
+    return;
+  }
+
+  const formatTime = (seconds) => {
+    if (seconds === undefined || seconds === null) {
+      return '--:--';
+    }
+    const mins = Math.floor(Math.max(0, seconds) / 60);
+    const secs = Math.max(0, seconds) % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  timerHTime.textContent = formatTime(boardData.timer.horizontalTime);
+  timerVTime.textContent = formatTime(boardData.timer.verticalTime);
+
+  // Update active state
+  const currentOrientation = boardData.currentPlayer;
+  timerHorizontal.classList.remove('active', 'warning', 'expired');
+  timerVertical.classList.remove('active', 'warning', 'expired');
+
+  if (currentOrientation === ORIENTATION.HORIZONTAL) {
+    timerHorizontal.classList.add('active');
+    if (boardData.timer.horizontalTime !== undefined && boardData.timer.horizontalTime <= 10) {
+      timerHorizontal.classList.add('warning');
+    }
+    if (boardData.timer.horizontalTime !== undefined && boardData.timer.horizontalTime <= 0) {
+      timerHorizontal.classList.add('expired');
+    }
+  } else if (currentOrientation === ORIENTATION.VERTICAL) {
+    timerVertical.classList.add('active');
+    if (boardData.timer.verticalTime !== undefined && boardData.timer.verticalTime <= 10) {
+      timerVertical.classList.add('warning');
+    }
+    if (boardData.timer.verticalTime !== undefined && boardData.timer.verticalTime <= 0) {
+      timerVertical.classList.add('expired');
+    }
+  }
+}
+
+function handleTimerExpired(orientation) {
+  stopTimer();
+  if (!boardData) {
+    return;
+  }
+
+  const opponent = orientation === ORIENTATION.HORIZONTAL ? ORIENTATION.VERTICAL : ORIENTATION.HORIZONTAL;
+  boardData.status = GAME_STATUS.FINISHED;
+  boardData.winner = opponent;
+  boardData.currentPlayer = null;
+
+  const winnerLabel = ORIENTATION_LABELS[opponent];
+  showFeedback(`Time expired! ${winnerLabel} wins.`, 'warning', 3000);
+  updateTurnIndicator();
+  syncWinnerBanner();
 }
 
 function showAiModeConfig(mode) {

@@ -279,14 +279,105 @@
         font-weight: 600;
         letter-spacing: 0.01em;
         text-align: center;
-        transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+        transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
         line-height: 1.4;
+        margin-bottom: 1.25rem;
+      }
+
+      #turn-indicator.horizontal {
+        background: rgba(31, 111, 235, 0.25);
+        color: #1f6feb;
+      }
+
+      #turn-indicator.vertical {
+        background: rgba(215, 58, 73, 0.25);
+        color: #d73a49;
+      }
+
+      #turn-indicator.ai {
+        background: rgba(99, 255, 213, 0.25);
+        color: #e8fff6;
       }
 
       #turn-indicator.surge {
-        background: rgba(31, 111, 235, 0.25);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(31, 111, 235, 0.2);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      #turn-indicator.horizontal.surge {
+        box-shadow: 0 4px 12px rgba(31, 111, 235, 0.4);
+        background: rgba(31, 111, 235, 0.35);
+      }
+
+      #turn-indicator.vertical.surge {
+        box-shadow: 0 4px 12px rgba(215, 58, 73, 0.4);
+        background: rgba(215, 58, 73, 0.35);
+      }
+
+      #turn-indicator.ai.surge {
+        box-shadow: 0 4px 12px rgba(99, 255, 213, 0.3);
+      }
+
+      .timer-display {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 0.85rem;
+        border-radius: 0.6rem;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        margin-bottom: 1.25rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .timer-display.hidden {
+        display: none;
+      }
+
+      .timer-player {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+        justify-content: center;
+      }
+
+      .timer-label {
+        color: rgba(255, 255, 255, 0.6);
+        font-weight: 500;
+      }
+
+      .timer-time {
+        font-variant-numeric: tabular-nums;
+        min-width: 3.5rem;
+        text-align: center;
+      }
+
+      .timer-player.active .timer-time {
+        color: #1f6feb;
+      }
+
+      .timer-player.active.vertical .timer-time {
+        color: #d73a49;
+      }
+
+      .timer-player.warning .timer-time {
+        color: #ffb84d;
+        animation: timer-pulse 1s ease-in-out infinite;
+      }
+
+      .timer-player.expired .timer-time {
+        color: #d73a49;
+        animation: timer-pulse 0.5s ease-in-out infinite;
+      }
+
+      @keyframes timer-pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
       }
 
       .panel-summary-line {
@@ -907,6 +998,17 @@
     </header>
     <div id="app">
       <aside id="panel">
+        <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
+        <div id="timer-display" class="timer-display hidden" aria-live="polite">
+          <div id="timer-horizontal" class="timer-player">
+            <span class="timer-label">H:</span>
+            <span id="timer-h-time" class="timer-time">00:00</span>
+          </div>
+          <div id="timer-vertical" class="timer-player">
+            <span class="timer-label">V:</span>
+            <span id="timer-v-time" class="timer-time">00:00</span>
+          </div>
+        </div>
         <section class="panel-section">
           <h2 class="panel-heading">AI Mode</h2>
           <button
@@ -929,12 +1031,15 @@
             Play PvP
           </button>
           <h2 class="panel-heading">Story Mode</h2>
-          <button id="story-btn" type="button" class="wide-button">Story Mode</button>
+          <button
+            id="story-btn"
+            type="button"
+            class="wide-button"
+            title="Open Story Mode to play campaign missions"
+          >
+            Story Mode
+          </button>
           <div id="panel-story-summary" class="panel-summary-line hidden"></div>
-          <div class="button-group">
-            <button id="regenerate-btn" type="button" class="wide-button">Regenerate Board</button>
-          </div>
-          <div id="turn-indicator" aria-live="polite">Horizontal (Blue) to move</div>
         </section>
         <section class="panel-section">
           <h2 class="panel-heading">Custom Board Setup</h2>
@@ -1098,6 +1203,36 @@
               <option value="vertical">Vertical (Red)</option>
               <option value="random">Random</option>
             </select>
+          </div>
+          <div class="ai-mode-field">
+            <label class="panel-label" for="pvp-timer-enabled">
+              <input
+                id="pvp-timer-enabled"
+                type="checkbox"
+                style="width: auto; margin-right: 0.5rem;"
+              />
+              Enable timer
+            </label>
+          </div>
+          <div class="ai-mode-field" id="pvp-timer-options" style="display: none;">
+            <label class="panel-label" for="pvp-timer-type">Timer Type</label>
+            <select id="pvp-timer-type" class="panel-select">
+              <option value="per-turn">Time per turn</option>
+              <option value="total">Total time per player</option>
+            </select>
+          </div>
+          <div class="ai-mode-field" id="pvp-timer-duration-field" style="display: none;">
+            <label class="panel-label" for="pvp-timer-duration">Time (seconds)</label>
+            <input
+              id="pvp-timer-duration"
+              type="number"
+              min="5"
+              max="3600"
+              step="5"
+              value="60"
+              class="panel-select"
+              style="width: 100%;"
+            />
           </div>
         </div>
         <div class="ai-mode-actions">
